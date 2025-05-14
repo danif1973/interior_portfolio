@@ -1,0 +1,33 @@
+{
+  "id": "project-3b29000d-b515-4fee-a296-f6ec2e7a636d",
+  "title": "זה פרוייקט חדש",
+  "summary": "",
+  "description": "",
+  "mainImage": {
+    "url": "/images/projects/project-3b29000d-b515-4fee-a296-f6ec2e7a636d/images.jpg",
+    "alt": "זה פרוייקט חדש - images.jpg",
+    "description": ""
+  },
+  "images": [
+    {
+      "url": "/images/projects/project-3b29000d-b515-4fee-a296-f6ec2e7a636d/images.jpg",
+      "alt": "זה פרוייקט חדש - images.jpg",
+      "description": ""
+    },
+    {
+      "url": "/images/projects/project-3b29000d-b515-4fee-a296-f6ec2e7a636d/main.jpg",
+      "alt": "זה פרוייקט חדש - main.jpg",
+      "description": ""
+    },
+    {
+      "url": "/images/projects/project-3b29000d-b515-4fee-a296-f6ec2e7a636d/small-room-interior-design.jpg",
+      "alt": "זה פרוייקט חדש - small-room-interior-design.jpg",
+      "description": ""
+    },
+    {
+      "url": "/images/projects/project-3b29000d-b515-4fee-a296-f6ec2e7a636d/What-Is-a-Modern-Home-Interior-Design-Idea.jpg",
+      "alt": "זה פרוייקט חדש - What-Is-a-Modern-Home-Interior-Design-Idea.jpg",
+      "description": ""
+    }
+  ]
+}
