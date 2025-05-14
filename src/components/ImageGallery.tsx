@@ -35,7 +35,7 @@ export default function ImageGallery({ images }: ImageGalleryProps) {
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [handleKeyDown]);
 
   return (
     <div className="relative">

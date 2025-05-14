@@ -43,7 +43,7 @@ export default function ProjectGallery({ project }: ProjectGalleryProps) {
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [handleKeyDown]);
 
   return (
     <div className="space-y-2">

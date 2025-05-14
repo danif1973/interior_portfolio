@@ -54,7 +54,7 @@ export default function AboutPage() {
                 We believe that exceptional interior design has the power to transform lives. Our mission is to create spaces that not only look beautiful but also enhance the way people live, work, and interact with their environment.
               </p>
               <p className="text-lg text-gray-600">
-                Through careful attention to detail, innovative solutions, and a deep understanding of our clients' needs, we strive to deliver designs that exceed expectations and stand the test of time.
+                Through careful attention to detail, innovative solutions, and a deep understanding of our clients&apos; needs, we strive to deliver designs that exceed expectations and stand the test of time.
               </p>
             </motion.div>
             <motion.div

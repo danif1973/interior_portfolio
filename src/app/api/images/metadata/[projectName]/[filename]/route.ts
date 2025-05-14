@@ -2,13 +2,6 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
-interface ImageMetadata {
-  description: string;
-  filename: string;
-  projectName: string;
-  uploadDate: string;
-}
-
 interface ProjectImage {
   url: string;
   alt: string;
