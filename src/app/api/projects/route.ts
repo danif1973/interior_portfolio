@@ -3,23 +3,7 @@ import { writeFile, mkdir } from 'fs/promises';
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { v4 as uuidv4 } from 'uuid';
-
-interface Project {
-  id: string;
-  title: string;
-  summary: string;
-  description: string;
-  mainImage: {
-    url: string;
-    alt: string;
-    description: string;
-  };
-  images: Array<{
-    url: string;
-    alt: string;
-    description: string;
-  }>;
-}
+import { Project } from '@/types/project';
 
 export async function POST(request: NextRequest) {
   try {
@@ -85,7 +69,8 @@ export async function POST(request: NextRequest) {
       summary: summary,
       description: description,
       mainImage: images[mainImageIndex],
-      images
+      images,
+      directory: projectId
     };
 
     const projectJsonPath = join(projectDir, 'project.json');
@@ -147,7 +132,8 @@ export async function GET() {
             summary: projectData.summary,
             description: projectData.description,
             mainImage: projectData.mainImage,
-            images: projectData.images
+            images: projectData.images,
+            directory: projectDir
           };
           
           projects.push(project);

@@ -1,12 +1,12 @@
 {
   "id": "project-1",
   "title": "הפרוייקט הראשון שלי",
-  "summary": "הפרוייקט הזה היה מאוד מאתגר",
+  "summary": "הפרוייקט הזה היה מאוד מאתגר  ",
   "description": "זה התיאור המלא של הפרוייקט. הפרוייקט היה מאוד מאתגר ודרש הרבה מאוד תכנון. עבדנו ימים כלילות והיה צורך בשילוב של חומרים וטכניקות שונות על מנת לייצר את האווירה הנינוחה שנדרשה ע\"י הלקוח.",
   "mainImage": {
-    "url": "/images/projects/Project 1/top-interior-designers-Kelly-Hoppen-1.jpg",
-    "alt": "Project 1 - top-interior-designers-Kelly-Hoppen-1",
-    "description": "מבט צידי על הלובי הבניין."
+    "url": "/images/projects/Project 1/images.jpg",
+    "alt": "Project 1 - images",
+    "description": "מבט קדמי על הסלון."
   },
   "images": [
     {

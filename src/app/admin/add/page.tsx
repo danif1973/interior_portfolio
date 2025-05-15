@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { z } from 'zod';
-import ConfirmationModal from '@/components/ConfirmationModal';
+import ConfirmationModal from '../../../components/ConfirmationModal';
 
 // Schema for project validation
 const projectSchema = z.object({

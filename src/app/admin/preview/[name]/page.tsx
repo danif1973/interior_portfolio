@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { use } from 'react';
 import ProjectPage from '@/components/ProjectPage';
 
 interface Project {
@@ -22,8 +21,8 @@ interface Project {
   directory: string;
 }
 
-export default function PreviewProject({ params }: { params: Promise<{ name: string }> }) {
-  const resolvedParams = use(params);
+export default function PreviewProject({ params }: { params: { name: string } }) {
+  const { name } = params;
   const [project, setProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +30,7 @@ export default function PreviewProject({ params }: { params: Promise<{ name: str
   useEffect(() => {
     const fetchProject = async () => {
       try {
-        const response = await fetch(`/api/projects/${encodeURIComponent(resolvedParams.name)}`);
+        const response = await fetch(`/api/projects/${encodeURIComponent(name)}`);
         if (!response.ok) {
           throw new Error('Failed to fetch project');
         }
@@ -45,7 +44,7 @@ export default function PreviewProject({ params }: { params: Promise<{ name: str
     };
 
     fetchProject();
-  }, [resolvedParams.name]);
+  }, [name]);
 
   if (isLoading) {
     return (

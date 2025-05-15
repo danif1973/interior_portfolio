@@ -6,10 +6,10 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ name: string }> }
+  context: { params: { name: string } }
 ) {
   try {
-    const { name } = await params;
+    const { name } = context.params;
     const decodedName = decodeURIComponent(name);
     const projectsDir = path.join(process.cwd(), 'public', 'images', 'projects');
 
@@ -88,10 +88,10 @@ export async function GET(
 
 export async function PUT(
   request: Request,
-  { params }: { params: Promise<{ name: string }> }
+  context: { params: { name: string } }
 ) {
   try {
-    const { name } = await params;
+    const { name } = context.params;
     const decodedName = decodeURIComponent(name);
     const projectsDir = path.join(process.cwd(), 'public', 'images', 'projects');
 
@@ -187,10 +187,10 @@ export async function PUT(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: Promise<{ name: string }> }
+  context: { params: { name: string } }
 ) {
   try {
-    const { name } = await params;
+    const { name } = context.params;
     const decodedName = decodeURIComponent(name);
     const projectsDir = path.join(process.cwd(), 'public', 'images', 'projects');
     const projectDir = path.join(projectsDir, decodedName);

@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { use } from 'react';
 import ConfirmationModal from '@/components/ConfirmationModal';
 
 interface Project {
@@ -24,8 +23,8 @@ interface Project {
   directory: string;
 }
 
-export default function EditProject({ params }: { params: Promise<{ name: string }> }) {
-  const { name } = use(params);
+export default function EditProject({ params }: { params: { name: string } }) {
+  const { name } = params;
   const [project, setProject] = useState<Project | null>(null);
   const [originalProject, setOriginalProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -348,57 +347,40 @@ export default function EditProject({ params }: { params: Promise<{ name: string
         </div>
       </main>
 
-      {/* Main Image Warning Modal */}
-      {showMainImageWarning && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Main Image Warning</h3>
-            <p className="text-gray-500 mb-6">This is the main image. Please select a different image as the main image before deleting this one.</p>
-            <div className="flex justify-end">
-              <button
-                onClick={() => {
-                  setShowMainImageWarning(false);
-                  setImageToDelete(null);
-                }}
-                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                OK
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Delete Image Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={imageToDelete !== null && !showMainImageWarning}
+        onClose={() => setImageToDelete(null)}
+        onConfirm={() => {
+          if (project && imageToDelete !== null) {
+            const newImages = [...project.images];
+            newImages.splice(imageToDelete, 1);
+            setProject({ ...project, images: newImages });
+            setImageToDelete(null);
+          }
+        }}
+        title="מחק תמונה"
+        message="האם אתה בטוח שברצונך למחוק תמונה זו? פעולה זו אינה ניתנת לביטול."
+        confirmText="מחק תמונה"
+        cancelText="ביטול"
+      />
 
-      {/* Delete Confirmation Modal */}
-      {imageToDelete !== null && !showMainImageWarning && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Delete Image</h3>
-            <p className="text-gray-500 mb-6">Are you sure you want to delete this image? This action cannot be undone.</p>
-            <div className="flex justify-end space-x-4">
-              <button
-                onClick={() => setImageToDelete(null)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  if (project && imageToDelete !== null) {
-                    const newImages = [...project.images];
-                    newImages.splice(imageToDelete, 1);
-                    setProject({ ...project, images: newImages });
-                    setImageToDelete(null);
-                  }
-                }}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Main Image Warning Modal */}
+      <ConfirmationModal
+        isOpen={showMainImageWarning}
+        onClose={() => {
+          setShowMainImageWarning(false);
+          setImageToDelete(null);
+        }}
+        onConfirm={() => {
+          setShowMainImageWarning(false);
+          setImageToDelete(null);
+        }}
+        title="אזהרת תמונה ראשית"
+        message="זוהי התמונה הראשית. אנא בחר תמונה אחרת כתמונה ראשית לפני מחיקת תמונה זו."
+        confirmText="אישור"
+        cancelText="ביטול"
+      />
 
       {/* Unsaved Changes Modal */}
       <ConfirmationModal
@@ -407,8 +389,8 @@ export default function EditProject({ params }: { params: Promise<{ name: string
         onConfirm={handleConfirmCancel}
         title="שינויים שלא נשמרו"
         message="יש לך שינויים שלא נשמרו. האם אתה בטוח שברצונך לעזוב?"
-        confirmText="עזוב"
-        cancelText="השאר"
+        confirmText="צא"
+        cancelText="ביטול"
       />
     </div>
   );

@@ -41,7 +41,7 @@ export default function Navigation() {
             </div>
 
             <Link href="/" className="text-4xl font-light text-gray-800 tracking-wide">
-              <span className="font-['Great_Vibes'] text-5xl">Natalie&apos;s Imagination</span>
+              <span className="text-5xl" style={{ fontFamily: 'var(--font-great-vibes)' }}>Natalie&apos;s Imagination</span>
             </Link>
 
             {/* Mobile menu button */}
@@ -164,7 +164,7 @@ export default function Navigation() {
             </div>
             <div className="text-left">
               <h3 className="text-3xl font-light mb-4">
-                <span className="font-['Great_Vibes'] text-4xl">Natalie&apos;s Imagination</span>
+                <span className="text-4xl" style={{ fontFamily: 'var(--font-great-vibes)' }}>Natalie&apos;s Imagination</span>
               </h3>
               <p className="text-gray-400 [direction:ltr]">
                 Creating beautiful spaces that inspire.
@@ -173,7 +173,7 @@ export default function Navigation() {
           </div>
           <div className="mt-12 pt-8 border-t border-gray-800 text-center text-gray-400">
             <p className="text-gray-400">
-              &copy; {new Date().getFullYear()} <span className="font-['Great_Vibes'] text-2xl">Natalie&apos;s Imagination</span>. All rights reserved.
+              &copy; {new Date().getFullYear()} <span className="text-2xl" style={{ fontFamily: 'var(--font-great-vibes)' }}>Natalie&apos;s Imagination</span>. All rights reserved.
             </p>
           </div>
         </div>

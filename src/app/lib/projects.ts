@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { Project } from '@/data/projects';
+import { Project } from '@/types/project';
 
 export async function getProjects(): Promise<Project[]> {
   const projects: Project[] = [];
@@ -35,7 +35,8 @@ export async function getProjects(): Promise<Project[]> {
               alt: '',
               description: ''
             },
-            images: projectData.images
+            images: projectData.images,
+            directory: projectDir
           };
           
           projects.push(project);

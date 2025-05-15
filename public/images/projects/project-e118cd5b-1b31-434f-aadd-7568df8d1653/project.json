@@ -1,0 +1,34 @@
+{
+  "id": "project-e118cd5b-1b31-434f-aadd-7568df8d1653",
+  "title": "פרוייקט השלישי שלי",
+  "summary": "",
+  "description": "",
+  "mainImage": {
+    "url": "/images/projects/project-e118cd5b-1b31-434f-aadd-7568df8d1653/images.jpg",
+    "alt": "פרוייקט השלידי שלי - images.jpg",
+    "description": ""
+  },
+  "images": [
+    {
+      "url": "/images/projects/project-e118cd5b-1b31-434f-aadd-7568df8d1653/images.jpg",
+      "alt": "פרוייקט השלידי שלי - images.jpg",
+      "description": "חדר 1"
+    },
+    {
+      "url": "/images/projects/project-e118cd5b-1b31-434f-aadd-7568df8d1653/main.jpg",
+      "alt": "פרוייקט השלידי שלי - main.jpg",
+      "description": "חדר 2"
+    },
+    {
+      "url": "/images/projects/project-e118cd5b-1b31-434f-aadd-7568df8d1653/small-room-interior-design.jpg",
+      "alt": "פרוייקט השלידי שלי - small-room-interior-design.jpg",
+      "description": "סלון"
+    },
+    {
+      "url": "/images/projects/project-e118cd5b-1b31-434f-aadd-7568df8d1653/What-Is-a-Modern-Home-Interior-Design-Idea.jpg",
+      "alt": "פרוייקט השלידי שלי - What-Is-a-Modern-Home-Interior-Design-Idea.jpg",
+      "description": ""
+    }
+  ],
+  "directory": "project-e118cd5b-1b31-434f-aadd-7568df8d1653"
+}

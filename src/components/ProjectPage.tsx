@@ -1,26 +1,10 @@
 'use client';
 
+import React from 'react';
 import { AnimatedSection } from '@/components/AnimatedSection';
 import ProjectGallery from '@/components/ProjectGallery';
 import Link from 'next/link';
-
-interface Project {
-  id: string;
-  title: string;
-  summary: string;
-  description: string;
-  mainImage: {
-    url: string;
-    alt: string;
-    description: string;
-  };
-  images: Array<{
-    url: string;
-    alt: string;
-    description: string;
-  }>;
-  directory: string;
-}
+import { Project } from '@/types/project';
 
 interface ProjectPageProps {
   project: Project;

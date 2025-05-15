@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Project } from '@/data/projects';
+import { Project } from '@/types/project';
 
 interface ProjectGalleryProps {
   project: Project;
@@ -24,21 +24,19 @@ export default function ProjectGallery({ project }: ProjectGalleryProps) {
     setIsZoomed(false);
   };
 
-  const handleNext = () => {
+  const handleNext = useCallback(() => {
     setSelectedImageIndex((prev) => (prev + 1) % project.images.length);
-    setIsZoomed(false);
-  };
+  }, [project.images.length]);
 
-  const handlePrevious = () => {
+  const handlePrevious = useCallback(() => {
     setSelectedImageIndex((prev) => (prev - 1 + project.images.length) % project.images.length);
-    setIsZoomed(false);
-  };
+  }, [project.images.length]);
 
-  const handleKeyDown = (e: KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'ArrowRight') handleNext();
     if (e.key === 'ArrowLeft') handlePrevious();
     if (e.key === 'Escape') setIsZoomed(false);
-  };
+  }, [handleNext, handlePrevious, setIsZoomed]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -102,28 +100,36 @@ export default function ProjectGallery({ project }: ProjectGalleryProps) {
             className="fixed inset-0 bg-black z-50"
             onClick={() => setIsZoomed(false)}
           >
-            <div className="relative w-full h-full">
+            <div 
+              className="relative w-full h-full"
+              onClick={(e) => e.stopPropagation()}
+            >
               <Image
                 src={project.images[selectedImageIndex].url}
                 alt={project.images[selectedImageIndex].alt || project.title}
                 fill
                 className="object-contain"
-                onClick={(e) => e.stopPropagation()}
                 priority
               />
 
               {/* Navigation Arrows */}
               <button
-                className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-4 rounded-full transition-colors"
-                onClick={handlePrevious}
+                className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-4 rounded-full transition-colors z-10"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handlePrevious();
+                }}
               >
                 <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
               <button
-                className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-4 rounded-full transition-colors"
-                onClick={handleNext}
+                className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-4 rounded-full transition-colors z-10"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleNext();
+                }}
               >
                 <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

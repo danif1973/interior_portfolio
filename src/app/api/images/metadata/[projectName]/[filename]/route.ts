@@ -20,13 +20,12 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: Request,
-  { params }: { params: { projectName: string; filename: string } }
+  context: { params: { projectName: string; filename: string } }
 ) {
   try {
-    const { projectName, filename } = params;
+    const { projectName, filename } = context.params;
     const decodedProjectName = decodeURIComponent(projectName);
     const decodedFilename = decodeURIComponent(filename);
-
     const metadataPath = path.join(
       process.cwd(),
       'public',
@@ -35,7 +34,6 @@ export async function GET(
       decodedProjectName,
       `${decodedFilename}.json`
     );
-
     if (!fs.existsSync(metadataPath)) {
       return new NextResponse(
         JSON.stringify({ error: 'Metadata not found' }),
@@ -45,7 +43,6 @@ export async function GET(
         }
       );
     }
-
     const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
     return new NextResponse(
       JSON.stringify(metadata),
@@ -97,13 +94,12 @@ const updateProjectJson = (projectName: string, filename: string, description: s
 
 export async function PUT(
   request: Request,
-  { params }: { params: { projectName: string; filename: string } }
+  context: { params: { projectName: string; filename: string } }
 ) {
   try {
-    const { projectName, filename } = params;
+    const { projectName, filename } = context.params;
     const decodedProjectName = decodeURIComponent(projectName);
     const decodedFilename = decodeURIComponent(filename);
-
     const metadataPath = path.join(
       process.cwd(),
       'public',
@@ -112,7 +108,6 @@ export async function PUT(
       decodedProjectName,
       `${decodedFilename}.json`
     );
-
     if (!fs.existsSync(metadataPath)) {
       return new NextResponse(
         JSON.stringify({ error: 'Metadata not found' }),
@@ -122,18 +117,13 @@ export async function PUT(
         }
       );
     }
-
     const body = await request.json();
     const { description } = body;
-
     const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
     metadata.description = description;
-
     fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
-
     // Update project.json with the new description
     updateProjectJson(decodedProjectName, decodedFilename, description);
-
     return new NextResponse(
       JSON.stringify(metadata),
       { 

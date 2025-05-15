@@ -2,6 +2,7 @@ import { loadProjects } from '../../lib/projectLoader';
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import ProjectPage from '@/components/ProjectPage';
+import { Project } from '@/types/project';
 
 interface PageProps {
   params: {
@@ -36,7 +37,7 @@ export default async function ProjectPageRoute({ params }: PageProps) {
     notFound();
   }
 
-  const validatedProject = projectSchema.parse(project);
+  const validatedProject = projectSchema.parse(project) as Project;
 
   return (
     <ProjectPage 

@@ -21,7 +21,7 @@ const config: Config = {
       fontFamily: {
         sans: ['var(--font-lato)'],
         heebo: ['var(--font-heebo)'],
-        'great-vibes': ['var(--font-great-vibes)'],
+        'dancing-script': ['var(--font-dancing-script)'],
       },
     },
   },

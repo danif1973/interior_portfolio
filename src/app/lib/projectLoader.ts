@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { Project } from '@/data/projects';
+import { Project } from '@/types/project';
 
 export async function loadProjects(): Promise<Project[]> {
   console.log('Loading projects from server component');
@@ -29,18 +29,20 @@ export async function loadProjects(): Promise<Project[]> {
           console.log('Found project.json for:', projectDir);
           
           // Convert the project data to match the Project interface
+          const images = Array.isArray(projectData.images) ? projectData.images : [];
+          const mainImage = projectData.mainImage || images[0] || {
+            url: '',
+            alt: '',
+            description: ''
+          };
           const project: Project = {
-            id: projectDir.toLowerCase().replace(/\s+/g, '-'),
-            title: projectData.title,
-            summary: projectData.summary,
-            description: projectData.description,
-            mainImage: projectData.mainImage || projectData.images[0] || {
-              url: '',
-              alt: '',
-              description: ''
-            },
-            images: projectData.images,
-            directory: projectDir // Store the actual directory name
+            id: typeof projectData.id === 'string' ? projectData.id : projectDir.toLowerCase().replace(/\s+/g, '-'),
+            title: typeof projectData.title === 'string' ? projectData.title : '',
+            summary: typeof projectData.summary === 'string' ? projectData.summary : '',
+            description: typeof projectData.description === 'string' ? projectData.description : '',
+            mainImage,
+            images,
+            directory: projectDir
           };
           
           projects.push(project);

@@ -1,15 +1,7 @@
+import React from 'react';
 import { motion } from 'framer-motion';
 import ProjectCard from './ProjectCard';
-
-interface Project {
-  id: string;
-  title: string;
-  summary: string;
-  mainImage: {
-    url: string;
-    alt: string;
-  };
-}
+import { Project } from '@/types/project';
 
 interface ProjectGridProps {
   projects: Project[];
