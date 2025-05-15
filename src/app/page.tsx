@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { AnimatedSection } from '@/components/AnimatedSection';
 import { loadProjects } from './lib/projectLoader';
 import ScrollLink from '@/components/ScrollLink';
+import { MobileScrollHandler } from '@/components/MobileScrollHandler';
 
 export default async function Home() {
   console.log('=== Starting Home Page Render ===');
@@ -12,8 +13,9 @@ export default async function Home() {
   
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      <MobileScrollHandler />
       {/* Hero Section */}
-      <section className="relative h-[100vh] flex items-center justify-center">
+      <section id="hero" className="relative h-[100vh] flex items-center justify-center">
         <div className="absolute inset-0">
           <ProjectImage
             src="/images/splash.jpg"
