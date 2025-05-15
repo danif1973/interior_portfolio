@@ -15,28 +15,56 @@ export default function ProjectGallery({ project }: ProjectGalleryProps) {
 
   // Find the index of the main image
   useEffect(() => {
+    console.log('=== Project Gallery Component Mounted ===');
+    console.log('Gallery details:', {
+      projectId: project.id,
+      totalImages: project.images.length,
+      mainImageUrl: project.mainImage.url
+    });
+
     const mainImageIndex = project.images.findIndex(img => img.url === project.mainImage.url);
+    console.log('🔍 Main image index:', mainImageIndex);
     setSelectedImageIndex(mainImageIndex >= 0 ? mainImageIndex : 0);
   }, [project]);
 
   const handleImageClick = (index: number) => {
+    console.log('🖼️ Image clicked:', {
+      index,
+      imageUrl: project.images[index].url
+    });
     setSelectedImageIndex(index);
     setIsZoomed(false);
   };
 
   const handleNext = useCallback(() => {
-    setSelectedImageIndex((prev) => (prev + 1) % project.images.length);
-  }, [project.images.length]);
+    const nextIndex = (selectedImageIndex + 1) % project.images.length;
+    console.log('➡️ Next image:', {
+      fromIndex: selectedImageIndex,
+      toIndex: nextIndex,
+      imageUrl: project.images[nextIndex].url
+    });
+    setSelectedImageIndex(nextIndex);
+  }, [project.images.length, selectedImageIndex]);
 
   const handlePrevious = useCallback(() => {
-    setSelectedImageIndex((prev) => (prev - 1 + project.images.length) % project.images.length);
-  }, [project.images.length]);
+    const prevIndex = (selectedImageIndex - 1 + project.images.length) % project.images.length;
+    console.log('⬅️ Previous image:', {
+      fromIndex: selectedImageIndex,
+      toIndex: prevIndex,
+      imageUrl: project.images[prevIndex].url
+    });
+    setSelectedImageIndex(prevIndex);
+  }, [project.images.length, selectedImageIndex]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    console.log('⌨️ Key pressed:', e.key);
     if (e.key === 'ArrowRight') handleNext();
     if (e.key === 'ArrowLeft') handlePrevious();
-    if (e.key === 'Escape') setIsZoomed(false);
-  }, [handleNext, handlePrevious, setIsZoomed]);
+    if (e.key === 'Escape') {
+      console.log('🔍 Zoom view closed (Escape key)');
+      setIsZoomed(false);
+    }
+  }, [handleNext, handlePrevious]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -54,7 +82,11 @@ export default function ProjectGallery({ project }: ProjectGalleryProps) {
             fill
             className="object-cover cursor-zoom-in"
             priority
-            onClick={() => setIsZoomed(true)}
+            onClick={() => {
+              console.log('🔍 Zoom view opened');
+              setIsZoomed(true);
+            }}
+            onError={(e) => console.error(`❌ Error loading main image: ${project.images[selectedImageIndex].url}`, e)}
           />
         </div>
 
@@ -84,6 +116,7 @@ export default function ProjectGallery({ project }: ProjectGalleryProps) {
                 alt={image.alt || project.title}
                 fill
                 className="object-cover"
+                onError={(e) => console.error(`❌ Error loading thumbnail: ${image.url}`, e)}
               />
             </motion.div>
           ))}
@@ -98,7 +131,10 @@ export default function ProjectGallery({ project }: ProjectGalleryProps) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black z-50"
-            onClick={() => setIsZoomed(false)}
+            onClick={() => {
+              console.log('🔍 Zoom view closed (background click)');
+              setIsZoomed(false);
+            }}
           >
             <div 
               className="relative w-full h-full"
@@ -110,6 +146,7 @@ export default function ProjectGallery({ project }: ProjectGalleryProps) {
                 fill
                 className="object-contain"
                 priority
+                onError={(e) => console.error(`❌ Error loading zoomed image: ${project.images[selectedImageIndex].url}`, e)}
               />
 
               {/* Navigation Arrows */}
@@ -141,6 +178,7 @@ export default function ProjectGallery({ project }: ProjectGalleryProps) {
                 className="absolute top-4 right-4 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full"
                 onClick={(e) => {
                   e.stopPropagation();
+                  console.log('🔍 Zoom view closed (close button)');
                   setIsZoomed(false);
                 }}
               >

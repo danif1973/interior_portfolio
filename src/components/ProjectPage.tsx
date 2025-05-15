@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { AnimatedSection } from '@/components/AnimatedSection';
 import ProjectGallery from '@/components/ProjectGallery';
 import Link from 'next/link';
@@ -13,6 +13,17 @@ interface ProjectPageProps {
 }
 
 export default function ProjectPage({ project, backHref, backText }: ProjectPageProps) {
+  useEffect(() => {
+    console.log('=== Project Page Component Mounted ===');
+    console.log('Project details:', {
+      id: project.id,
+      title: project.title,
+      summary: project.summary,
+      imageCount: project.images.length,
+      mainImageUrl: project.mainImage.url
+    });
+  }, [project]);
+
   return (
     <main className="min-h-screen bg-white" dir="rtl">
       <section className="relative py-0.5 md:py-1 border-b border-gray-100">
@@ -20,6 +31,7 @@ export default function ProjectPage({ project, backHref, backText }: ProjectPage
           <Link 
             href={backHref} 
             className="inline-flex items-center text-gray-600 hover:text-gray-900 transition-colors mb-0.5 md:mb-1"
+            onClick={() => console.log('🔙 Back button clicked')}
           >
             <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

@@ -29,21 +29,47 @@ const projectSchema = z.object({
 });
 
 export default async function ProjectPageRoute({ params }: PageProps) {
-  const { id } = params;
+  console.log('=== Starting Project Detail Page Load ===');
+  console.log('Project ID from params:', params.id);
+  
   const projects = await loadProjects();
-  const project = projects.find(p => p.id === id);
-
+  console.log('📊 Total projects loaded:', projects.length);
+  
+  const project = projects.find(p => p.id === params.id);
+  console.log('🔍 Looking for project with ID:', params.id);
+  
   if (!project) {
+    console.error('❌ Project not found:', params.id);
     notFound();
   }
+  
+  console.log('✅ Project found:', {
+    id: project.id,
+    title: project.title,
+    imageCount: project.images.length,
+    mainImageUrl: project.mainImage.url
+  });
 
-  const validatedProject = projectSchema.parse(project) as Project;
+  try {
+    const validatedProject = projectSchema.parse(project) as Project;
+    console.log('✅ Project validation successful');
+    console.log('Project details:', {
+      id: validatedProject.id,
+      title: validatedProject.title,
+      summary: validatedProject.summary,
+      imageCount: validatedProject.images.length,
+      directory: validatedProject.directory
+    });
 
-  return (
-    <ProjectPage 
-      project={validatedProject}
-      backHref="/#projects"
-      backText="חזרה לדף הבית"
-    />
-  );
+    return (
+      <ProjectPage 
+        project={validatedProject}
+        backHref="/#projects"
+        backText="חזרה לדף הבית"
+      />
+    );
+  } catch (error) {
+    console.error('❌ Project validation failed:', error);
+    throw error;
+  }
 } 

@@ -1,21 +1,23 @@
-import Image from 'next/image';
+import { ProjectImage } from '@/components/ProjectImage';
 import Link from 'next/link';
 import { AnimatedSection } from '@/components/AnimatedSection';
 import { loadProjects } from './lib/projectLoader';
 import ScrollLink from '@/components/ScrollLink';
 
 export default async function Home() {
+  console.log('=== Starting Home Page Render ===');
   const projects = await loadProjects();
+  console.log('📊 Projects loaded for home page:', projects.length);
+  console.log('Project titles:', projects.map(p => p.title));
   
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Hero Section */}
       <section className="relative h-screen">
         <div className="absolute inset-0">
-          <Image
+          <ProjectImage
             src="/images/splash.jpg"
             alt="Interior Design"
-            fill
             className="object-cover"
             priority
           />
@@ -42,35 +44,42 @@ export default async function Home() {
         <div className="max-w-7xl mx-auto">
           <AnimatedSection className="text-center mb-16">
             <h2 className="text-3xl font-light text-gray-900 mb-4">הפרוייקטים שלי</h2>
-           
           </AnimatedSection>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {projects.map((project) => (
-              <Link 
-                key={project.id}
-                href={`/projects/${project.id}`}
-                className="block group"
-              >
-                <AnimatedSection
-                  className="relative bg-white rounded-2xl shadow-sm overflow-hidden h-full"
+            {projects.map((project) => {
+              console.log('🎨 Rendering project card:', project.title);
+              console.log('Project details:', {
+                id: project.id,
+                mainImageUrl: project.mainImage.url,
+                imageCount: project.images.length
+              });
+              
+              return (
+                <Link 
+                  key={project.id}
+                  href={`/projects/${project.id}`}
+                  className="block group"
                 >
-                  <div className="relative aspect-[4/3]">
-                    <Image
-                      src={project.mainImage.url}
-                      alt={project.mainImage.alt}
-                      fill
-                      className="object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                  </div>
-                  <div className="p-6 text-right">
-                    <h3 className="text-xl font-medium text-gray-900 mb-2">{project.title}</h3>
-                    <p className="text-gray-600">{project.summary}</p>
-                  </div>
-                </AnimatedSection>
-              </Link>
-            ))}
+                  <AnimatedSection
+                    className="relative bg-white rounded-2xl shadow-sm overflow-hidden h-full"
+                  >
+                    <div className="relative aspect-[4/3]">
+                      <ProjectImage
+                        src={project.mainImage.url}
+                        alt={project.mainImage.alt}
+                        className="object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    </div>
+                    <div className="p-6 text-right">
+                      <h3 className="text-xl font-medium text-gray-900 mb-2">{project.title}</h3>
+                      <p className="text-gray-600">{project.summary}</p>
+                    </div>
+                  </AnimatedSection>
+                </Link>
+              );
+            })}
           </div>
 
           {/* <AnimatedSection className="text-center mt-12">
