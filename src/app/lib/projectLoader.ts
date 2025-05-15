@@ -6,17 +6,31 @@ export async function loadProjects(): Promise<Project[]> {
   console.log('=== Starting Project Load ===');
   console.log('Current working directory:', process.cwd());
   const projects: Project[] = [];
-  const projectsDir = path.join(process.cwd(), 'public', 'Images', 'Projects');
-  console.log('Looking for projects in:', projectsDir);
+  
+  // Try both cases for the directory name
+  const possiblePaths = [
+    path.join(process.cwd(), 'public', 'Images', 'Projects'),
+    path.join(process.cwd(), 'public', 'Images', 'projects'),
+    path.join(process.cwd(), 'public', 'images', 'Projects'),
+    path.join(process.cwd(), 'public', 'images', 'projects')
+  ];
+
+  let projectsDir = '';
+  for (const dirPath of possiblePaths) {
+    console.log('Checking directory:', dirPath);
+    if (fs.existsSync(dirPath)) {
+      projectsDir = dirPath;
+      console.log('✅ Found projects directory at:', dirPath);
+      break;
+    }
+  }
+
+  if (!projectsDir) {
+    console.error('❌ Projects directory not found in any of the expected locations:', possiblePaths);
+    return projects;
+  }
 
   try {
-    // Check if the projects directory exists
-    if (!fs.existsSync(projectsDir)) {
-      console.error('❌ Projects directory not found at:', projectsDir);
-      return projects;
-    }
-    console.log('✅ Projects directory found');
-
     // Get all project directories
     const projectDirs = fs.readdirSync(projectsDir);
     console.log('📁 Found project directories:', projectDirs);
