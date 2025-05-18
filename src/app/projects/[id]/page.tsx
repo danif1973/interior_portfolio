@@ -1,8 +1,9 @@
-import { loadProjects } from '../../lib/projectLoader';
+import { loadProject } from '@/lib/mongodb/projectLoader';
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import ProjectPage from '@/components/ProjectPage';
 import { Project } from '@/types/project';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 interface PageProps {
   params: {
@@ -24,18 +25,14 @@ const projectSchema = z.object({
     url: z.string(),
     alt: z.string(),
     description: z.string()
-  })),
-  directory: z.string()
+  }))
 });
 
 export default async function ProjectPageRoute({ params }: PageProps) {
   console.log('=== Starting Project Detail Page Load ===');
   console.log('Project ID from params:', params.id);
   
-  const projects = await loadProjects();
-  console.log('📊 Total projects loaded:', projects.length);
-  
-  const project = projects.find(p => p.id === params.id);
+  const project = await loadProject(params.id);
   console.log('🔍 Looking for project with ID:', params.id);
   
   if (!project) {
@@ -51,22 +48,41 @@ export default async function ProjectPageRoute({ params }: PageProps) {
   });
 
   try {
-    const validatedProject = projectSchema.parse(project) as Project;
+    // Transform the project data to only include display fields
+    const displayProject = {
+      id: project.id,
+      title: project.title,
+      summary: project.summary,
+      description: project.description,
+      mainImage: {
+        url: project.mainImage.url,
+        alt: project.mainImage.alt,
+        description: project.mainImage.description
+      },
+      images: project.images.map(image => ({
+        url: image.url,
+        alt: image.alt,
+        description: image.description
+      }))
+    };
+
+    const validatedProject = projectSchema.parse(displayProject) as Project;
     console.log('✅ Project validation successful');
     console.log('Project details:', {
       id: validatedProject.id,
       title: validatedProject.title,
       summary: validatedProject.summary,
-      imageCount: validatedProject.images.length,
-      directory: validatedProject.directory
+      imageCount: validatedProject.images.length
     });
 
     return (
-      <ProjectPage 
-        project={validatedProject}
-        backHref="/#projects"
-        backText="חזרה לדף הבית"
-      />
+      <ErrorBoundary>
+        <ProjectPage 
+          project={validatedProject}
+          backHref="/#projects"
+          backText="חזרה לדף הבית"
+        />
+      </ErrorBoundary>
     );
   } catch (error) {
     console.error('❌ Project validation failed:', error);

@@ -4,14 +4,16 @@ import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Project } from '@/types/project';
+import { ErrorBoundary } from './ErrorBoundary';
 
 interface ProjectGalleryProps {
   project: Project;
 }
 
-export default function ProjectGallery({ project }: ProjectGalleryProps) {
+function ProjectGalleryContent({ project }: ProjectGalleryProps) {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
+  const [loadedImages, setLoadedImages] = useState<Set<number>>(new Set());
 
   // Find the index of the main image
   useEffect(() => {
@@ -26,6 +28,18 @@ export default function ProjectGallery({ project }: ProjectGalleryProps) {
     console.log('🔍 Main image index:', mainImageIndex);
     setSelectedImageIndex(mainImageIndex >= 0 ? mainImageIndex : 0);
   }, [project]);
+
+  const handleImageLoad = (index: number) => {
+    console.log('✅ Image loaded:', {
+      index,
+      imageUrl: project.images[index].url
+    });
+    setLoadedImages(prev => {
+      const newSet = new Set(prev);
+      newSet.add(index);
+      return newSet;
+    });
+  };
 
   const handleImageClick = (index: number) => {
     console.log('🖼️ Image clicked:', {
@@ -116,7 +130,11 @@ export default function ProjectGallery({ project }: ProjectGalleryProps) {
                 alt={image.alt || project.title}
                 fill
                 className="object-cover"
-                onError={(e) => console.error(`❌ Error loading thumbnail: ${image.url}`, e)}
+                onLoad={() => handleImageLoad(index)}
+                onError={(e) => {
+                  console.error(`❌ Error loading thumbnail: ${image.url}`, e);
+                  handleImageLoad(index);
+                }}
               />
             </motion.div>
           ))}
@@ -196,5 +214,13 @@ export default function ProjectGallery({ project }: ProjectGalleryProps) {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+export default function ProjectGallery(props: ProjectGalleryProps) {
+  return (
+    <ErrorBoundary>
+      <ProjectGalleryContent {...props} />
+    </ErrorBoundary>
   );
 } 

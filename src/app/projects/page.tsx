@@ -1,4 +1,4 @@
-import { loadProjects } from '../lib/projectLoader';
+import { loadProjects } from '@/lib/mongodb/projectLoader';
 import AnimatedProjectCard from '@/components/AnimatedProjectCard';
 
 export default async function ProjectsPage() {
@@ -10,9 +10,9 @@ export default async function ProjectsPage() {
       <section className="relative py-20 bg-gradient-to-r from-indigo-600 to-purple-600">
         <div className="container mx-auto px-4">
           <div className="text-center text-white">
-            <h1 className="text-4xl md:text-5xl font-bold mb-4">Our Projects</h1>
+            <h1 className="text-4xl md:text-5xl font-bold mb-4">פרויקטים</h1>
             <p className="text-lg md:text-xl max-w-2xl mx-auto">
-              Explore our portfolio of stunning interior design projects that showcase our expertise and creativity.
+              גלריית הפרויקטים שלנו מציגה את היצירתיות והמומחיות שלנו בעיצוב פנים
             </p>
           </div>
         </div>

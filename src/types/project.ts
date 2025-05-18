@@ -13,5 +13,4 @@ export interface Project {
     alt: string;
     description: string;
   }>;
-  directory: string;
 } 
