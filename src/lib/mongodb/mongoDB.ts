@@ -51,7 +51,7 @@ async function connectDB() {
 
     console.log('\n=== INITIALIZING DATABASE CONNECTION ===');
     console.log('Attempting to connect to database:', dbName);
-    console.log('Connection string:', MONGODB_URI.split('@')[0] + '@***');
+    //console.log('Connection string:', MONGODB_URI.split('@')[0] + '@***');
 
     cached.promise = mongoose.connect(MONGODB_URI, opts).then(async (mongoose) => {
       console.log('✓ Initial database connection established');
