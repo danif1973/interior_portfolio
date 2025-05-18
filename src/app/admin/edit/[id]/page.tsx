@@ -5,26 +5,26 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import ConfirmationModal from '@/components/ConfirmationModal';
 
+interface ProjectImage {
+  url: string;
+  alt: string;
+  description: string;
+  data?: Buffer;
+  contentType?: string;
+}
+
 interface Project {
   id: string;
   title: string;
   summary: string;
   description: string;
-  mainImage: {
-    url: string;
-    alt: string;
-    description: string;
-  };
-  images: Array<{
-    url: string;
-    alt: string;
-    description: string;
-  }>;
+  mainImage: ProjectImage;
+  images: ProjectImage[];
   directory: string;
 }
 
-export default function EditProject({ params }: { params: { name: string } }) {
-  const { name } = params;
+export default function EditProjectPage({ params }: { params: { id: string } }) {
+  const { id } = params;
   const [project, setProject] = useState<Project | null>(null);
   const [originalProject, setOriginalProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -38,7 +38,7 @@ export default function EditProject({ params }: { params: { name: string } }) {
   useEffect(() => {
     const fetchProject = async () => {
       try {
-        const response = await fetch(`/api/projects/${encodeURIComponent(name)}`);
+        const response = await fetch(`/api/projects/${encodeURIComponent(id)}`);
         if (!response.ok) {
           throw new Error('Failed to fetch project');
         }
@@ -53,7 +53,7 @@ export default function EditProject({ params }: { params: { name: string } }) {
     };
 
     fetchProject();
-  }, [name]);
+  }, [id]);
 
   const hasUnsavedChanges = () => {
     if (!project || !originalProject) return false;
@@ -88,26 +88,61 @@ export default function EditProject({ params }: { params: { name: string } }) {
     if (!project) return;
 
     try {
-      // Ensure mainImage is included in the save data
-      const projectData = {
-        ...project,
-        mainImage: project.mainImage
-      };
+      console.log('Starting save process for project:', project.id);
+      
+      // Create a FormData object for the update
+      const formData = new FormData();
+      formData.append('title', project.title);
+      formData.append('summary', project.summary);
+      formData.append('description', project.description);
+      
+      // Find the index of the main image in the updated images array
+      const mainImageIndex = project.images.findIndex(img => img.url === project.mainImage.url);
+      console.log('Main image index:', mainImageIndex);
+      formData.append('mainImageIndex', mainImageIndex.toString());
 
-      const response = await fetch(`/api/projects/${encodeURIComponent(name)}`, {
+      // Add all current images to the form data
+      console.log('Processing images for save:', project.images.length);
+      project.images.forEach((image, index) => {
+        console.log(`Processing image ${index}:`, {
+          url: image.url,
+          hasData: !!image.data,
+          contentType: image.contentType
+        });
+        
+        // For all images, send the complete image data
+        const imageData = {
+          url: image.url,
+          alt: image.alt || `${project.title} - Image ${index}`,
+          description: image.description || '',
+          data: image.data,
+          contentType: image.contentType || 'image/jpeg'
+        };
+        
+        formData.append(`existing-image-${index}`, JSON.stringify(imageData));
+      });
+
+      console.log('FormData keys:', Array.from(formData.keys()));
+
+      const response = await fetch(`/api/projects/${encodeURIComponent(id)}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(projectData),
+        body: formData,
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save project');
+        const errorData = await response.json();
+        console.error('Save failed:', errorData);
+        throw new Error(errorData.details || errorData.error || 'Failed to save project');
       }
 
+      const savedProject = await response.json();
+      console.log('Project saved successfully:', savedProject);
+
+      // Update original project state
+      setOriginalProject(savedProject);
       router.push('/admin');
     } catch (error) {
+      console.error('Error saving project:', error);
       setError(error instanceof Error ? error.message : 'An error occurred');
     }
   };
@@ -117,44 +152,208 @@ export default function EditProject({ params }: { params: { name: string } }) {
 
     setIsUploading(true);
     const file = event.target.files[0];
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('projectName', project.directory);
+    console.log('Uploading file:', file.name, file.type);
 
     try {
-      const response = await fetch('/api/upload', {
-        method: 'POST',
+      // Convert the file to base64
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          const base64 = reader.result as string;
+          resolve(base64);
+        };
+        reader.onerror = reject;
+      });
+      reader.readAsDataURL(file);
+      const base64Data = await base64Promise;
+
+      // Create a FormData object for the update
+      const formData = new FormData();
+      formData.append('title', project.title);
+      formData.append('summary', project.summary);
+      formData.append('description', project.description);
+      
+      // Find the index of the main image in the updated images array
+      const mainImageIndex = project.images.findIndex(img => img.url === project.mainImage.url);
+      formData.append('mainImageIndex', mainImageIndex.toString());
+
+      // Add all existing images
+      project.images.forEach((image, idx) => {
+        const imageData = {
+          url: image.url,
+          alt: image.alt || `${project.title} - Image ${idx}`,
+          description: image.description || '',
+          data: image.data,
+          contentType: image.contentType || 'image/jpeg'
+        };
+        formData.append(`existing-image-${idx}`, JSON.stringify(imageData));
+      });
+
+      // Add the new image
+      const newImageData = {
+        url: base64Data,
+        alt: `${project.title} - ${file.name}`,
+        description: '',
+        data: base64Data.split(',')[1], // Remove the data URL prefix
+        contentType: file.type
+      };
+      formData.append(`existing-image-${project.images.length}`, JSON.stringify(newImageData));
+
+      console.log('Sending form data with keys:', Array.from(formData.keys()));
+
+      const response = await fetch(`/api/projects/${encodeURIComponent(project.id)}`, {
+        method: 'PUT',
         body: formData,
       });
 
       if (!response.ok) {
-        throw new Error('Failed to upload image');
+        const errorData = await response.json();
+        throw new Error(errorData.details || errorData.error || 'Failed to save project with new image');
       }
 
-      const data = await response.json();
+      const updatedProject = await response.json();
+      console.log('Project updated successfully:', updatedProject);
       
-      // Add the new image to the project
-      const newImage = {
-        url: data.url,
-        alt: '',
-        description: ''
-      };
-
-      setProject({
-        ...project,
-        images: [...project.images, newImage]
-      });
+      // Update project state with the response data
+      setProject(updatedProject);
+      setOriginalProject(updatedProject);
     } catch (error) {
+      console.error('Error uploading image:', error);
       setError(error instanceof Error ? error.message : 'Failed to upload image');
     } finally {
       setIsUploading(false);
     }
   };
 
+  const handleImageDelete = async (index: number) => {
+    if (!project) return;
+
+    // Don't allow deleting the main image
+    if (project.images[index].url === project.mainImage.url) {
+      setShowMainImageWarning(true);
+      return;
+    }
+
+    // Set the image to delete and show confirmation modal
+    setImageToDelete(index);
+  };
+
+  const handleConfirmImageDelete = async () => {
+    if (!project || imageToDelete === null) return;
+
+    // Create a new array without the deleted image
+    const newImages = project.images.filter((_, i) => i !== imageToDelete);
+    
+    // Update the project state
+    setProject({
+      ...project,
+      images: newImages
+    });
+
+    // Save the changes immediately
+    try {
+      const formData = new FormData();
+      formData.append('title', project.title);
+      formData.append('summary', project.summary);
+      formData.append('description', project.description);
+      
+      // Find the index of the main image in the updated images array
+      const mainImageIndex = newImages.findIndex(img => img.url === project.mainImage.url);
+      formData.append('mainImageIndex', mainImageIndex.toString());
+
+      // Add all remaining images to the form data
+      newImages.forEach((image, idx) => {
+        if (image.data) {
+          formData.append(`image-${idx}`, new Blob([image.data], { type: image.contentType }));
+        } else {
+          formData.append(`existing-image-${idx}`, JSON.stringify(image));
+        }
+      });
+
+      const response = await fetch(`/api/projects/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || errorData.error || 'Failed to delete image');
+      }
+
+      // Update original project state to match new state
+      setOriginalProject({
+        ...project,
+        images: newImages
+      });
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Failed to delete image');
+      // Revert the change if the save failed
+      setProject(project);
+    } finally {
+      setImageToDelete(null);
+    }
+  };
+
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-red-600"></div>
+      <div className="min-h-screen bg-gray-50">
+        {/* Header Skeleton */}
+        <header className="bg-white shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center py-6">
+              <div className="h-8 bg-gray-200 rounded w-1/4 animate-pulse" />
+              <div className="flex space-x-4">
+                <div className="h-10 bg-gray-200 rounded w-24 animate-pulse" />
+                <div className="h-10 bg-gray-200 rounded w-32 animate-pulse" />
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Main Content Skeleton */}
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden p-6">
+            {/* Title Input Skeleton */}
+            <div className="mb-6">
+              <div className="h-4 bg-gray-200 rounded w-1/6 mb-2 animate-pulse" />
+              <div className="h-10 bg-gray-200 rounded w-full animate-pulse" />
+            </div>
+
+            {/* Summary Input Skeleton */}
+            <div className="mb-6">
+              <div className="h-4 bg-gray-200 rounded w-1/6 mb-2 animate-pulse" />
+              <div className="h-10 bg-gray-200 rounded w-full animate-pulse" />
+            </div>
+
+            {/* Description Input Skeleton */}
+            <div className="mb-6">
+              <div className="h-4 bg-gray-200 rounded w-1/6 mb-2 animate-pulse" />
+              <div className="h-32 bg-gray-200 rounded w-full animate-pulse" />
+            </div>
+
+            {/* Main Image Upload Skeleton */}
+            <div className="mb-6">
+              <div className="h-4 bg-gray-200 rounded w-1/6 mb-2 animate-pulse" />
+              <div className="h-40 bg-gray-200 rounded w-full animate-pulse" />
+            </div>
+
+            {/* Additional Images Upload Skeleton */}
+            <div className="mb-6">
+              <div className="h-4 bg-gray-200 rounded w-1/6 mb-2 animate-pulse" />
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                {[...Array(4)].map((_, index) => (
+                  <div key={index} className="aspect-square bg-gray-200 rounded animate-pulse" />
+                ))}
+              </div>
+            </div>
+
+            {/* Buttons Skeleton */}
+            <div className="flex justify-end space-x-4">
+              <div className="h-10 bg-gray-200 rounded w-24 animate-pulse" />
+              <div className="h-10 bg-gray-200 rounded w-24 animate-pulse" />
+            </div>
+          </div>
+        </main>
       </div>
     );
   }
@@ -311,10 +510,7 @@ export default function EditProject({ params }: { params: { name: string } }) {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (project && image.url === project.mainImage.url) {
-                              setShowMainImageWarning(true);
-                            }
-                            setImageToDelete(index);
+                            handleImageDelete(index);
                           }}
                           className="text-white bg-red-600 hover:bg-red-700 rounded-full p-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                         >
@@ -351,14 +547,7 @@ export default function EditProject({ params }: { params: { name: string } }) {
       <ConfirmationModal
         isOpen={imageToDelete !== null && !showMainImageWarning}
         onClose={() => setImageToDelete(null)}
-        onConfirm={() => {
-          if (project && imageToDelete !== null) {
-            const newImages = [...project.images];
-            newImages.splice(imageToDelete, 1);
-            setProject({ ...project, images: newImages });
-            setImageToDelete(null);
-          }
-        }}
+        onConfirm={handleConfirmImageDelete}
         title="מחק תמונה"
         message="האם אתה בטוח שברצונך למחוק תמונה זו? פעולה זו אינה ניתנת לביטול."
         confirmText="מחק תמונה"

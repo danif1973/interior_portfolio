@@ -107,8 +107,51 @@ export default function AdminDashboard() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-600"></div>
+      <div className="min-h-screen bg-gray-50">
+        {/* Header Skeleton */}
+        <header className="bg-white shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center py-6">
+              <div className="h-8 bg-gray-200 rounded w-1/4 animate-pulse" />
+              <div className="flex space-x-4">
+                <div className="h-10 bg-gray-200 rounded w-32 animate-pulse" />
+                <div className="h-10 bg-gray-200 rounded w-32 animate-pulse" />
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Main Content Skeleton */}
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+            <div className="px-6 py-5 border-b border-gray-200">
+              <div className="h-6 bg-gray-200 rounded w-1/4 animate-pulse" />
+              <div className="mt-1 h-4 bg-gray-200 rounded w-1/3 animate-pulse" />
+            </div>
+
+            <div className="divide-y divide-gray-200">
+              {[...Array(3)].map((_, index) => (
+                <div key={index} className="p-6">
+                  <div className="flex items-start space-x-6">
+                    <div className="flex-shrink-0 w-32 h-32 bg-gray-200 rounded-lg animate-pulse" />
+                    <div className="flex-1 min-w-0">
+                      <div className="h-6 bg-gray-200 rounded w-1/3 mb-2 animate-pulse" />
+                      <div className="h-4 bg-gray-200 rounded w-2/3 mb-4 animate-pulse" />
+                      <div className="flex space-x-4">
+                        <div className="h-8 bg-gray-200 rounded w-20 animate-pulse" />
+                        <div className="h-8 bg-gray-200 rounded w-32 animate-pulse" />
+                        <div className="h-8 bg-gray-200 rounded w-20 animate-pulse" />
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0">
+                      <div className="h-5 bg-gray-200 rounded w-24 animate-pulse" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </main>
       </div>
     );
   }
@@ -158,16 +201,18 @@ export default function AdminDashboard() {
                 <div className="flex items-start space-x-6">
                   {/* Project Image */}
                   <div className="flex-shrink-0 w-32 h-32 relative rounded-lg overflow-hidden bg-gray-100">
-                    {project.mainImage?.url && !failedImages.has(project.mainImage.url) ? (
+                    {project.mainImage?.url ? (
                       <Image
                         src={project.mainImage.url}
                         alt={project.mainImage.alt || project.title}
                         fill
                         className="object-cover"
-                        onError={() => {
+                        onError={(e) => {
+                          console.error('Image failed to load:', project.mainImage.url);
                           setFailedImages(prev => new Set([...prev, project.mainImage.url]));
                         }}
                         unoptimized
+                        priority
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-gray-400">
@@ -223,7 +268,7 @@ export default function AdminDashboard() {
                       <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
-                      <span>{project.images.length} תמונות</span>
+                      <span>{project.images?.length || 0} תמונות</span>
                     </div>
                   </div>
                 </div>

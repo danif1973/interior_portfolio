@@ -64,8 +64,7 @@ export async function loadProjects(): Promise<Project[]> {
             summary: typeof projectData.summary === 'string' ? projectData.summary : '',
             description: typeof projectData.description === 'string' ? projectData.description : '',
             mainImage,
-            images,
-            directory: projectDir
+            images
           };
           
           projects.push(project);
