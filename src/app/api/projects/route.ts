@@ -1,19 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb/mongoDB';
-import { Project } from '@/lib/models/Project';
-import { v4 as uuidv4 } from 'uuid';
+import { getProjects, createProject } from '@/lib/projects';
+import { logger } from '@/lib/logger';
 
 // GET /api/projects - List all projects
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-    const projects = await Project.find({})
-      .sort({ createdAt: -1 }) // Sort by newest first
-      .select('id title summary mainImage images'); // Include images array
-
+    const projects = await getProjects();
+    logger.debug('Projects fetched successfully', {
+      count: projects.length
+    }, request);
     return NextResponse.json(projects);
   } catch (error) {
-    console.error('Error fetching projects:', error);
+    logger.error('Failed to fetch projects', {
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }, request);
     return NextResponse.json(
       { error: 'Failed to fetch projects' },
       { status: 500 }
@@ -24,86 +24,41 @@ export async function GET() {
 // POST /api/projects - Create new project
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
-    const formData = await request.formData();
-    const title = formData.get('title') as string;
-    const summary = formData.get('summary') as string | null;
-    const description = formData.get('description') as string | null;
-    const mainImageIndex = parseInt(formData.get('mainImageIndex') as string);
+    const data = await request.json();
+    
+    // Log the project creation attempt
+    logger.info('Project creation attempt', {
+      title: data.title,
+      category: data.category
+    }, request);
 
-    if (!title) {
+    // Validate required fields
+    const requiredFields = ['title', 'description', 'category', 'images'];
+    const missingFields = requiredFields.filter(field => !data[field]);
+    
+    if (missingFields.length > 0) {
+      logger.warn('Project creation validation failed', {
+        missingFields
+      }, request);
       return NextResponse.json(
-        { error: 'Title is required' },
+        { error: 'Missing required fields', fields: missingFields },
         { status: 400 }
       );
     }
 
-    // Process and prepare images
-    const images = [];
-    let index = 0;
-    while (formData.has(`image-${index}`)) {
-      const imageFile = formData.get(`image-${index}`) as File | null;
-      const imageDataStr = formData.get(`image-data-${index}`) as string;
-      
-      if (!imageFile) break;
+    const project = await createProject(data);
+    logger.info('Project created successfully', {
+      id: project.id,
+      title: project.title
+    }, request);
 
-      // Parse image data including description
-      let imageData = {
-        alt: `${title} - ${imageFile.name}`,
-        description: ''
-      };
-      
-      try {
-        if (imageDataStr) {
-          const parsedData = JSON.parse(imageDataStr);
-          imageData = {
-            ...imageData,
-            ...parsedData
-          };
-        }
-      } catch (e) {
-        console.error('Error parsing image data:', e);
-      }
-
-      // Convert image to buffer
-      const bytes = await imageFile.arrayBuffer();
-      const buffer = Buffer.from(bytes);
-      
-      images.push({
-        url: `data:${imageFile.type};base64,${buffer.toString('base64')}`,
-        alt: imageData.alt,
-        description: imageData.description,
-        data: buffer,
-        contentType: imageFile.type
-      });
-      index++;
-    }
-
-    if (images.length === 0) {
-      return NextResponse.json(
-        { error: 'At least one image is required' },
-        { status: 400 }
-      );
-    }
-
-    // Create project in MongoDB
-    const project = await Project.create({
-      id: `project-${uuidv4()}`,
-      title,
-      summary: summary || '',
-      description: description || '',
-      mainImage: images[mainImageIndex],
-      images
-    });
-
-    return NextResponse.json(project, { status: 201 });
+    return NextResponse.json(project);
   } catch (error) {
-    console.error('Error creating project:', error);
+    logger.error('Failed to create project', {
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }, request);
     return NextResponse.json(
-      { 
-        error: 'Failed to create project',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
+      { error: 'Failed to create project' },
       { status: 500 }
     );
   }

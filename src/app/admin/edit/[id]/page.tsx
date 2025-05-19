@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { PROJECT_VALIDATION, projectSchema, type ProjectFormData } from '@/lib/validation';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import ImageUploader, { type ImageUploaderImage } from '@/components/ImageUploader';
+import { fetchWithCSRF } from '@/lib/csrf-client';
 
 interface Project extends ProjectFormData {
   id: string;
@@ -42,6 +43,15 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
 
     fetchProject();
   }, [params.id]);
+
+  // Add debug logging for CSRF token
+  useEffect(() => {
+    const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    console.log('Meta CSRF Token:', metaToken);
+    
+    // Log all cookies for debugging
+    console.log('All Cookies:', document.cookie);
+  }, []);
 
   const hasUnsavedChanges = () => {
     if (!project || !originalProject) return false;
@@ -186,7 +196,7 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
         }
       });
 
-      const response = await fetch(`/api/projects/${encodeURIComponent(project.id)}`, {
+      const response = await fetchWithCSRF(`/api/projects/${encodeURIComponent(project.id)}`, {
         method: 'PUT',
         body: formData,
       });
@@ -202,6 +212,7 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
       router.push('/admin');
       router.refresh();
     } catch (err) {
+      console.error('Save error:', err);
       setError(err instanceof Error ? err.message : 'An error occurred while updating the project');
     } finally {
       setIsSubmitting(false);

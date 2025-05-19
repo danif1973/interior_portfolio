@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Lato, Heebo, Great_Vibes } from "next/font/google";
 import "./globals.css";
 import Navigation from "@/components/Navigation";
+import { generateCSRFToken, setCSRFToken } from "@/lib/csrf";
+import { cookies } from 'next/headers';
 
 const lato = Lato({ 
   weight: ['100', '300', '400', '700', '900'],
@@ -28,13 +30,33 @@ export const metadata: Metadata = {
   description: "A showcase of interior design projects and transformations",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
+  // Get existing token or generate new one
+  const cookieStore = cookies();
+  let csrfToken = cookieStore.get('csrf_token')?.value;
+  
+  if (!csrfToken) {
+    try {
+      // Generate new token only if one doesn't exist
+      csrfToken = await generateCSRFToken();
+      // Set the token in the cookie
+      setCSRFToken(csrfToken);
+    } catch (error) {
+      console.error('Error generating CSRF token:', error);
+      // If token generation fails, use a fallback token
+      csrfToken = 'fallback-token';
+    }
+  }
+
   return (
     <html lang="he" dir="rtl" className={`${lato.className} ${heebo.variable} ${greatVibes.variable} min-h-screen bg-white`}>
+      <head>
+        <meta name="csrf-token" content={csrfToken} />
+      </head>
       <body className="antialiased font-heebo">
         <Navigation />
         <div className="pt-20">

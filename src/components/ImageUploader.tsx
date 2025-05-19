@@ -12,6 +12,10 @@ export interface ImageUploaderImage {
   contentType?: string;
 }
 
+// Image validation constants
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
+
 interface ImageUploaderProps {
   images: ImageUploaderImage[];
   onImagesChange: (images: ImageUploaderImage[]) => void;
@@ -30,6 +34,17 @@ export default function ImageUploader({
   const [isDragging, setIsDragging] = useState(false);
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
   const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
+
+  // Helper function to validate image
+  const validateImage = (file: File): string | null => {
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      return `סוג קובץ לא נתמך. אנא העלה תמונות בפורמט JPEG, PNG או WebP`;
+    }
+    if (file.size > MAX_IMAGE_SIZE) {
+      return `הקובץ גדול מדי. גודל מקסימלי: ${MAX_IMAGE_SIZE / (1024 * 1024)}MB`;
+    }
+    return null;
+  };
 
   // Helper function to check for duplicates
   const isDuplicateImage = (file: File, existingImages: ImageUploaderImage[]): boolean => {
@@ -86,7 +101,14 @@ export default function ImageUploader({
         processedFiles.add(fullPath);
 
         if (file.type.startsWith('image/')) {
-          if (isDuplicateImage(file, [...images, ...imageFiles])) { // Check against both existing and new images
+          // Validate image type and size
+          const validationError = validateImage(file);
+          if (validationError) {
+            duplicates.push(`${fullPath} (${validationError})`);
+            return;
+          }
+
+          if (isDuplicateImage(file, [...images, ...imageFiles])) {
             duplicates.push(fullPath);
           } else {
             const preview = URL.createObjectURL(file);
@@ -145,7 +167,7 @@ export default function ImageUploader({
 
     const imageFiles: ImageUploaderImage[] = [];
     const duplicates: string[] = [];
-    const processedFiles = new Set<string>(); // Track all files processed in this selection
+    const processedFiles = new Set<string>();
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -158,7 +180,14 @@ export default function ImageUploader({
       processedFiles.add(fullPath);
 
       if (file.type.startsWith('image/')) {
-        if (isDuplicateImage(file, [...images, ...imageFiles])) { // Check against both existing and new images
+        // Validate image type and size
+        const validationError = validateImage(file);
+        if (validationError) {
+          duplicates.push(`${fullPath} (${validationError})`);
+          continue;
+        }
+
+        if (isDuplicateImage(file, [...images, ...imageFiles])) {
           duplicates.push(fullPath);
         } else {
           const preview = URL.createObjectURL(file);
