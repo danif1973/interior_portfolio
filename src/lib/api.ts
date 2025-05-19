@@ -1,4 +1,4 @@
-import { CSRF_TOKEN_HEADER } from './csrf';
+import { CSRF_TOKEN_HEADER } from './csrf-server';
 
 // Helper function to get CSRF token from meta tag
 function getCSRFTokenFromMeta(): string | null {

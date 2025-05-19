@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Lato, Heebo, Great_Vibes } from "next/font/google";
 import "./globals.css";
 import Navigation from "@/components/Navigation";
-import { generateCSRFToken, setCSRFToken } from "@/lib/csrf";
+import { generateCSRFToken, setCSRFToken } from "@/lib/csrf-server";
 import { cookies } from 'next/headers';
 
 const lato = Lato({ 

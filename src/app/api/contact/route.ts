@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
-import { logger } from '@/lib/logger';
 
 // Create a transporter using SMTP
 const transporter = nodemailer.createTransport({
@@ -13,37 +12,13 @@ const transporter = nodemailer.createTransport({
 
 export async function POST(request: NextRequest) {
   try {
-    const data = await request.json();
-    
-    // Log the contact form submission attempt
-    logger.info('Contact form submission attempt', {
-      name: data.name,
-      email: data.email,
-      subject: data.subject
-    }, request);
+    const body = await request.json();
+    const { name, email, phone, message, projectType } = body;
 
     // Validate required fields
-    const requiredFields = ['name', 'email', 'message'];
-    const missingFields = requiredFields.filter(field => !data[field]);
-    
-    if (missingFields.length > 0) {
-      logger.warn('Contact form validation failed', {
-        missingFields
-      }, request);
+    if (!name || !email || !phone || !message) {
       return NextResponse.json(
-        { error: 'Missing required fields', fields: missingFields },
-        { status: 400 }
-      );
-    }
-
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(data.email)) {
-      logger.warn('Invalid email format in contact form', {
-        email: data.email
-      }, request);
-      return NextResponse.json(
-        { error: 'Invalid email format' },
+        { error: 'Missing required fields' },
         { status: 400 }
       );
     }
@@ -52,36 +27,27 @@ export async function POST(request: NextRequest) {
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: process.env.EMAIL_USER, // Send to yourself
-      subject: `New Contact Form Submission - ${data.projectType} Project`,
+      subject: `New Contact Form Submission - ${projectType} Project`,
       html: `
         <h2>New Contact Form Submission</h2>
-        <p><strong>Name:</strong> ${data.name}</p>
-        <p><strong>Email:</strong> ${data.email}</p>
-        <p><strong>Phone:</strong> ${data.phone}</p>
-        <p><strong>Project Type:</strong> ${data.projectType}</p>
+        <p><strong>Name:</strong> ${name}</p>
+        <p><strong>Email:</strong> ${email}</p>
+        <p><strong>Phone:</strong> ${phone}</p>
+        <p><strong>Project Type:</strong> ${projectType}</p>
         <p><strong>Message:</strong></p>
-        <p>${data.message}</p>
+        <p>${message}</p>
       `,
     };
 
     // Send email
     await transporter.sendMail(mailOptions);
 
-    logger.info('Contact form submission successful', {
-      name: data.name,
-      email: data.email,
-      subject: data.subject
-    }, request);
-
     return NextResponse.json(
       { message: 'Email sent successfully' },
       { status: 200 }
     );
   } catch (error) {
-    logger.error('Contact form submission failed', {
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }, request);
-    
+    console.error('Error sending email:', error);
     return NextResponse.json(
       { error: 'Failed to send email' },
       { status: 500 }

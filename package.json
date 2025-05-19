@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "npm run generate-projects && next dev",
-    "dev:turbo": "npm run generate-projects && next dev --turbopack",
+    "dev:turbo": "npm run generate-projects && next dev --turbo",
+    "dev:vercel": "npm run generate-projects && vercel dev",
+    "dev:prod": "npm run generate-projects && npm run build && next start",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -14,6 +16,7 @@
     "@headlessui/react": "^2.2.3",
     "@types/js-cookie": "^3.0.6",
     "@types/nodemailer": "^6.4.14",
+    "cross-env": "^7.0.3",
     "framer-motion": "^12.10.4",
     "js-cookie": "^3.0.5",
     "mongoose": "^8.2.0",
@@ -22,7 +25,8 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "sharp": "^0.34.1",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "vercel": "^33.5.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
