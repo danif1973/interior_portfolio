@@ -2,16 +2,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
-import { z } from 'zod';
-import ConfirmationModal from '../../../components/ConfirmationModal';
 import { PROJECT_VALIDATION, projectSchema, type ProjectFormData } from '../../../lib/validation';
-
-interface ImageFile {
-  file: File;
-  preview: string;
-  description: string;
-}
+import ConfirmationModal from '../../../components/ConfirmationModal';
+import ImageUploader, { type ImageUploaderImage } from '../../../components/ImageUploader';
 
 export default function AddProject() {
   const router = useRouter();
@@ -21,7 +14,7 @@ export default function AddProject() {
     description: '',
   });
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof ProjectFormData, string>>>({});
-  const [images, setImages] = useState<ImageFile[]>([]);
+  const [images, setImages] = useState<ImageUploaderImage[]>([]);
   const [mainImageIndex, setMainImageIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,80 +86,6 @@ export default function AddProject() {
     validateField(name as keyof ProjectFormData, value);
   };
 
-  const handleFolderSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-
-    const imageFiles: ImageFile[] = [];
-    const existingNames = new Set(images.map(img => img.file.name));
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      if (file.type.startsWith('image/') && !existingNames.has(file.name)) {
-        const preview = URL.createObjectURL(file);
-        imageFiles.push({ file, preview, description: '' });
-        existingNames.add(file.name);
-      }
-    }
-
-    setImages(prevImages => [...prevImages, ...imageFiles]);
-    if (images.length === 0 && imageFiles.length > 0) {
-      setMainImageIndex(0);
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    const items = e.dataTransfer.items;
-    if (!items) return;
-
-    const imageFiles: ImageFile[] = [];
-    const existingNames = new Set(images.map(img => img.file.name));
-
-    const processEntry = async (entry: FileSystemEntry) => {
-      if (entry.isFile) {
-        const file = await new Promise<File>((resolve) => {
-          (entry as FileSystemFileEntry).file(resolve);
-        });
-        if (file.type.startsWith('image/') && !existingNames.has(file.name)) {
-          const preview = URL.createObjectURL(file);
-          imageFiles.push({ file, preview, description: '' });
-          existingNames.add(file.name);
-        }
-      } else if (entry.isDirectory) {
-        const reader = (entry as FileSystemDirectoryEntry).createReader();
-        const entries = await new Promise<FileSystemEntry[]>((resolve) => {
-          reader.readEntries(resolve);
-        });
-        for (const entry of entries) {
-          await processEntry(entry);
-        }
-      }
-    };
-
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item.kind === 'file') {
-        const entry = item.webkitGetAsEntry();
-        if (entry) {
-          await processEntry(entry);
-        }
-      }
-    }
-
-    setImages(prevImages => [...prevImages, ...imageFiles]);
-    if (images.length === 0 && imageFiles.length > 0) {
-      setMainImageIndex(0);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -198,18 +117,16 @@ export default function AddProject() {
 
       // Append all images with their descriptions
       images.forEach((image, index) => {
-        // Create image data object similar to edit page
-        const imageData = {
-          file: image.file,
-          alt: `${formData.title} - ${image.file.name}`,
-          description: image.description || '',
-          contentType: image.file.type
-        };
-        
-        // Append the image file
-        formDataToSend.append(`image-${index}`, image.file);
-        // Append the image data as JSON
-        formDataToSend.append(`image-data-${index}`, JSON.stringify(imageData));
+        if (image.file) {
+          // Append the image file
+          formDataToSend.append(`image-${index}`, image.file);
+          // Append the image data as JSON
+          formDataToSend.append(`image-data-${index}`, JSON.stringify({
+            alt: image.alt,
+            description: image.description,
+            contentType: image.contentType
+          }));
+        }
       });
 
       const response = await fetch('/api/projects', {
@@ -236,11 +153,7 @@ export default function AddProject() {
       router.push('/admin');
       router.refresh(); // Force a refresh of the current route
     } catch (err) {
-      if (err instanceof z.ZodError) {
-        setError(err.errors[0].message);
-      } else {
-        setError(err instanceof Error ? err.message : 'An error occurred while creating the project');
-      }
+      setError(err instanceof Error ? err.message : 'An error occurred while creating the project');
     } finally {
       setIsSubmitting(false);
     }
@@ -358,131 +271,24 @@ export default function AddProject() {
                 <label className="block text-sm font-medium text-gray-700">
                   תמונות הפרויקט
                 </label>
-                <div 
-                  className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg"
-                  onDragOver={handleDragOver}
-                  onDrop={handleDrop}
-                >
-                  <div className="space-y-1 text-center">
-                    <svg
-                      className="mx-auto h-12 w-12 text-gray-400"
-                      stroke="currentColor"
-                      fill="none"
-                      viewBox="0 0 48 48"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                        strokeWidth={2}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    <div className="flex text-sm text-gray-600">
-                      <label
-                        htmlFor="folder-upload"
-                        className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500"
-                      >
-                        <span>העלה תיקייה</span>
-                        <input
-                          id="folder-upload"
-                          name="folder-upload"
-                          type="file"
-                          multiple
-                          accept="image/*"
-                          onChange={handleFolderSelect}
-                          className="sr-only"
-                        />
-                      </label>
-                      <p className="pl-1">או גרור ושחרר</p>
-                    </div>
-                    <p className="text-xs text-gray-500">PNG, JPG, GIF עד 10MB</p>
-                  </div>
-                </div>
+                <ImageUploader
+                  images={images}
+                  onImagesChange={setImages}
+                  mainImageIndex={mainImageIndex}
+                  onMainImageChange={setMainImageIndex}
+                  onImageDelete={(index) => {
+                    const newImages = [...images];
+                    newImages.splice(index, 1);
+                    setImages(newImages);
+                    if (mainImageIndex >= newImages.length) {
+                      setMainImageIndex(Math.max(0, newImages.length - 1));
+                    }
+                  }}
+                />
               </div>
-
-              {images.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-4">
-                    בחר תמונה ראשית
-                  </label>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
-                    onDragOver={handleDragOver}
-                    onDrop={handleDrop}
-                  >
-                    {images.map((image, index) => (
-                      <div key={index} className="space-y-2">
-                        <div
-                          className={`relative aspect-square rounded-lg overflow-hidden cursor-pointer border-2 ${
-                            mainImageIndex === index ? 'border-indigo-500' : 'border-transparent'
-                          }`}
-                          onClick={() => setMainImageIndex(index)}
-                        >
-                          <Image
-                            src={image.preview}
-                            alt={`Preview ${index + 1}`}
-                            fill
-                            className="object-cover"
-                          />
-                          <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-50 transition-opacity duration-200 flex items-center justify-center opacity-0 hover:opacity-100">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const newImages = [...images];
-                                newImages.splice(index, 1);
-                                setImages(newImages);
-                                if (mainImageIndex >= newImages.length) {
-                                  setMainImageIndex(Math.max(0, newImages.length - 1));
-                                }
-                              }}
-                              className="text-white bg-red-600 hover:bg-red-700 rounded-full p-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                            >
-                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          </div>
-                          {mainImageIndex === index && (
-                            <div className="absolute inset-0 bg-indigo-500/20 flex items-center justify-center">
-                              <svg
-                                className="h-8 w-8 text-white"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth="2"
-                                  d="M5 13l4 4L19 7"
-                                />
-                              </svg>
-                            </div>
-                          )}
-                        </div>
-                        <textarea
-                          dir="rtl"
-                          value={image.description}
-                          onChange={(e) => {
-                            const newImages = [...images];
-                            newImages[index] = {
-                              ...newImages[index],
-                              description: e.target.value
-                            };
-                            setImages(newImages);
-                          }}
-                          placeholder="תיאור התמונה..."
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-right"
-                          rows={2}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
-            <div className="flex justify-end space-x-4">
+            <div className="flex justify-end space-x-3">
               <button
                 type="button"
                 onClick={handleCancel}

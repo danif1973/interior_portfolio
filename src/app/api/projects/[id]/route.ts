@@ -65,58 +65,78 @@ export async function PUT(
       mainImageIndex = parseInt(formData.get('mainImageIndex') as string);
       console.log('Received data:', { title, summary, description, mainImageIndex });
 
-      // Process existing images first
+      // Process all images in order
       let index = 0;
+      const processedImages: ProjectImage[] = [];
+
+      // First, collect all existing images
+      const existingImages = new Map<number, ProjectImage>();
       while (formData.has(`existing-image-${index}`)) {
         const existingImageStr = formData.get(`existing-image-${index}`) as string;
         console.log(`Processing existing-image-${index}`);
         
         try {
           const existingImage = JSON.parse(existingImageStr);
-          // Ensure the image has all required fields
-          const imageData = {
+          existingImages.set(index, {
             url: existingImage.url,
             alt: existingImage.alt || `${title} - Image ${index}`,
             description: existingImage.description || '',
-            data: existingImage.data || Buffer.from(''),
             contentType: existingImage.contentType || 'image/jpeg'
-          };
-          console.log(`Parsed existing image ${index}:`, {
-            url: imageData.url,
-            hasData: !!imageData.data,
-            contentType: imageData.contentType
           });
-          images.push(imageData);
         } catch (e) {
           console.error('Error parsing existing image:', e);
         }
         index++;
       }
 
-      // Process new images
+      // Then process all images in order (both existing and new)
       index = 0;
-      while (formData.has(`image-${index}`)) {
-        const imageFile = formData.get(`image-${index}`) as File | null;
-        if (!imageFile) break;
+      while (formData.has(`image-${index}`) || existingImages.has(index)) {
+        if (formData.has(`image-${index}`)) {
+          // Handle new image
+          const imageFile = formData.get(`image-${index}`) as File;
+          const imageDataStr = formData.get(`image-data-${index}`) as string;
+          
+          console.log(`Processing new image-${index}:`, imageFile.name, imageFile.type);
 
-        console.log(`Processing new image-${index}:`, imageFile.name, imageFile.type);
+          // Parse image metadata
+          let imageData = {
+            alt: `${title} - ${imageFile.name}`,
+            description: '',
+            contentType: imageFile.type
+          };
+          
+          try {
+            if (imageDataStr) {
+              const parsedData = JSON.parse(imageDataStr);
+              imageData = {
+                ...imageData,
+                ...parsedData
+              };
+            }
+          } catch (e) {
+            console.error('Error parsing image data:', e);
+          }
 
-        // Convert image to buffer
-        const bytes = await imageFile.arrayBuffer();
-        const buffer = Buffer.from(bytes);
-        
-        const imageData = {
-          url: `data:${imageFile.type};base64,${buffer.toString('base64')}`,
-          alt: `${title} - ${imageFile.name}`,
-          description: '',
-          data: buffer,
-          contentType: imageFile.type
-        };
-        
-        console.log(`Created image data for ${imageFile.name}`);
-        images.push(imageData);
+          // Convert image to buffer
+          const bytes = await imageFile.arrayBuffer();
+          const buffer = Buffer.from(bytes);
+          
+          processedImages.push({
+            url: `data:${imageFile.type};base64,${buffer.toString('base64')}`,
+            alt: imageData.alt,
+            description: imageData.description,
+            data: buffer,
+            contentType: imageFile.type
+          });
+        } else if (existingImages.has(index)) {
+          // Handle existing image
+          processedImages.push(existingImages.get(index)!);
+        }
         index++;
       }
+
+      images = processedImages;
     } else {
       // Handle JSON data
       const data = await request.json();

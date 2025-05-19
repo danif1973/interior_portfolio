@@ -2,41 +2,31 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
-import ConfirmationModal from '@/components/ConfirmationModal';
 import { PROJECT_VALIDATION, projectSchema, type ProjectFormData } from '@/lib/validation';
-
-interface ProjectImage {
-  url: string;
-  alt: string;
-  description: string;
-  data?: Buffer;
-  contentType?: string;
-}
+import ConfirmationModal from '@/components/ConfirmationModal';
+import ImageUploader, { type ImageUploaderImage } from '@/components/ImageUploader';
 
 interface Project extends ProjectFormData {
   id: string;
-  images: ProjectImage[];
-  mainImage: ProjectImage;
+  images: ImageUploaderImage[];
+  mainImage: ImageUploaderImage;
 }
 
 export default function EditProjectPage({ params }: { params: { id: string } }) {
-  const { id } = params;
+  const router = useRouter();
   const [project, setProject] = useState<Project | null>(null);
   const [originalProject, setOriginalProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof ProjectFormData, string>>>({});
-  const router = useRouter();
-  const [isUploading, setIsUploading] = useState(false);
-  const [imageToDelete, setImageToDelete] = useState<number | null>(null);
-  const [showMainImageWarning, setShowMainImageWarning] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
+  const [showMainImageWarning, setShowMainImageWarning] = useState(false);
 
   useEffect(() => {
     const fetchProject = async () => {
       try {
-        const response = await fetch(`/api/projects/${encodeURIComponent(id)}`);
+        const response = await fetch(`/api/projects/${encodeURIComponent(params.id)}`);
         if (!response.ok) {
           throw new Error('Failed to fetch project');
         }
@@ -51,7 +41,7 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
     };
 
     fetchProject();
-  }, [id]);
+  }, [params.id]);
 
   const hasUnsavedChanges = () => {
     if (!project || !originalProject) return false;
@@ -68,18 +58,6 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
 
   const handleConfirmCancel = () => {
     router.push('/admin');
-  };
-
-  const handleImageClick = (index: number) => {
-    if (!project) return;
-    const newImages = [...project.images];
-    const selectedImage = newImages[index];
-    
-    // Update mainImage with the selected image
-    setProject({
-      ...project,
-      mainImage: selectedImage
-    });
   };
 
   const validateField = (name: keyof ProjectFormData, value: string) => {
@@ -143,10 +121,9 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
     if (!project) return;
-    
-    setProject(prev => ({ ...prev!, [name]: value }));
+    const { name, value } = e.target;
+    setProject(prev => prev ? { ...prev, [name]: value } : null);
     validateField(name as keyof ProjectFormData, value);
   };
 
@@ -154,6 +131,9 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
     if (!project) return;
 
     try {
+      setIsSubmitting(true);
+      setError(null);
+
       // Validate all fields
       const result = projectSchema.safeParse({
         title: project.title,
@@ -168,14 +148,14 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
           errors[path] = err.message;
         });
         setFieldErrors(errors);
-        setError('יש לתקן את השגיאות בטופס');
-        return; // Stop here if validation fails
+        throw new Error('יש לתקן את השגיאות בטופס');
       }
 
-      setError(null); // Clear any previous errors
-      console.log('Starting save process for project:', project.id);
-      
-      // Create a FormData object for the update
+      if (project.images.length === 0) {
+        throw new Error('נדרשת לפחות תמונה אחת');
+      }
+
+      // Create FormData for file upload
       const formData = new FormData();
       formData.append('title', project.title.trim());
       formData.append('summary', project.summary?.trim() || '');
@@ -183,127 +163,28 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
       
       // Find the index of the main image in the updated images array
       const mainImageIndex = project.images.findIndex(img => img.url === project.mainImage.url);
-      console.log('Main image index:', mainImageIndex);
       formData.append('mainImageIndex', mainImageIndex.toString());
 
-      // Add all current images to the form data
-      console.log('Processing images for save:', project.images.length);
+      // Append all images in their current order
       project.images.forEach((image, index) => {
-        console.log(`Processing image ${index}:`, {
-          url: image.url,
-          hasData: !!image.data,
-          contentType: image.contentType
-        });
-        
-        // For all images, send the complete image data
-        const imageData = {
-          url: image.url,
-          alt: image.alt || `${project.title} - Image ${index}`,
-          description: image.description || '',
-          data: image.data,
-          contentType: image.contentType || 'image/jpeg'
-        };
-        
-        formData.append(`existing-image-${index}`, JSON.stringify(imageData));
+        if (image.file) {
+          // For new images, append both the file and its metadata
+          formData.append(`image-${index}`, image.file);
+          formData.append(`image-data-${index}`, JSON.stringify({
+            alt: image.alt,
+            description: image.description,
+            contentType: image.contentType
+          }));
+        } else {
+          // For existing images, just append the metadata with their current index
+          formData.append(`existing-image-${index}`, JSON.stringify({
+            url: image.url,
+            alt: image.alt,
+            description: image.description,
+            contentType: image.contentType
+          }));
+        }
       });
-
-      console.log('FormData keys:', Array.from(formData.keys()));
-
-      const response = await fetch(`/api/projects/${encodeURIComponent(id)}`, {
-        method: 'PUT',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Save failed:', errorData);
-        setError(errorData.details || errorData.error || 'Failed to save project');
-        return; // Stop here if the save fails
-      }
-
-      const savedProject = await response.json();
-      console.log('Project saved successfully:', savedProject);
-
-      // Update original project state
-      setOriginalProject(savedProject);
-      router.push('/admin');
-    } catch (error) {
-      console.error('Error saving project:', error);
-      setError(error instanceof Error ? error.message : 'An error occurred');
-    }
-  };
-
-  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!event.target.files || !event.target.files[0] || !project) return;
-
-    const file = event.target.files[0];
-    
-    // Check if an image with the same name already exists
-    const existingNames = new Set(project.images.map(img => {
-      // Get the filename from the alt text which contains the original filename
-      const altParts = img.alt.split(' - ');
-      return altParts[altParts.length - 1] || ''; // Get the last part after the last ' - '
-    }));
-
-    console.log('Checking for duplicates:', {
-      newFile: file.name,
-      existingNames: Array.from(existingNames)
-    });
-
-    if (existingNames.has(file.name)) {
-      console.log('Duplicate image detected:', file.name);
-      return; // Silently ignore duplicate images
-    }
-
-    setIsUploading(true);
-    console.log('Uploading file:', file.name, file.type);
-
-    try {
-      // Convert the file to base64
-      const reader = new FileReader();
-      const base64Promise = new Promise<string>((resolve, reject) => {
-        reader.onload = () => {
-          const base64 = reader.result as string;
-          resolve(base64);
-        };
-        reader.onerror = reject;
-      });
-      reader.readAsDataURL(file);
-      const base64Data = await base64Promise;
-
-      // Create a FormData object for the update
-      const formData = new FormData();
-      formData.append('title', project.title.trim());
-      formData.append('summary', project.summary?.trim() || '');
-      formData.append('description', project.description?.trim() || '');
-      
-      // Find the index of the main image in the updated images array
-      const mainImageIndex = project.images.findIndex(img => img.url === project.mainImage.url);
-      formData.append('mainImageIndex', mainImageIndex.toString());
-
-      // Add all existing images
-      project.images.forEach((image, idx) => {
-        const imageData = {
-          url: image.url,
-          alt: image.alt || `${project.title} - Image ${idx}`,
-          description: image.description || '',
-          data: image.data,
-          contentType: image.contentType || 'image/jpeg'
-        };
-        formData.append(`existing-image-${idx}`, JSON.stringify(imageData));
-      });
-
-      // Add the new image
-      const newImageData = {
-        url: base64Data,
-        alt: `${project.title} - ${file.name}`,
-        description: '',
-        data: base64Data.split(',')[1], // Remove the data URL prefix
-        contentType: file.type
-      };
-      formData.append(`existing-image-${project.images.length}`, JSON.stringify(newImageData));
-
-      console.log('Sending form data with keys:', Array.from(formData.keys()));
 
       const response = await fetch(`/api/projects/${encodeURIComponent(project.id)}`, {
         method: 'PUT',
@@ -312,24 +193,22 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.details || errorData.error || 'Failed to save project with new image');
+        throw new Error(errorData.details || errorData.error || 'Failed to update project');
       }
 
       const updatedProject = await response.json();
-      console.log('Project updated successfully:', updatedProject);
-      
-      // Update project state with the response data
       setProject(updatedProject);
       setOriginalProject(updatedProject);
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      setError(error instanceof Error ? error.message : 'Failed to upload image');
+      router.push('/admin');
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred while updating the project');
     } finally {
-      setIsUploading(false);
+      setIsSubmitting(false);
     }
   };
 
-  const handleImageDelete = async (index: number) => {
+  const handleImageDelete = (index: number) => {
     if (!project) return;
 
     // Don't allow deleting the main image
@@ -338,64 +217,12 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
       return;
     }
 
-    // Set the image to delete and show confirmation modal
-    setImageToDelete(index);
-  };
-
-  const handleConfirmImageDelete = async () => {
-    if (!project || imageToDelete === null) return;
-
-    // Create a new array without the deleted image
-    const newImages = project.images.filter((_, i) => i !== imageToDelete);
-    
-    // Update the project state
+    const newImages = [...project.images];
+    newImages.splice(index, 1);
     setProject({
       ...project,
       images: newImages
     });
-
-    // Save the changes immediately
-    try {
-      const formData = new FormData();
-      formData.append('title', project.title.trim());
-      formData.append('summary', project.summary?.trim() || '');
-      formData.append('description', project.description?.trim() || '');
-      
-      // Find the index of the main image in the updated images array
-      const mainImageIndex = newImages.findIndex(img => img.url === project.mainImage.url);
-      formData.append('mainImageIndex', mainImageIndex.toString());
-
-      // Add all remaining images to the form data
-      newImages.forEach((image, idx) => {
-        if (image.data) {
-          formData.append(`image-${idx}`, new Blob([image.data], { type: image.contentType }));
-        } else {
-          formData.append(`existing-image-${idx}`, JSON.stringify(image));
-        }
-      });
-
-      const response = await fetch(`/api/projects/${encodeURIComponent(id)}`, {
-        method: 'PUT',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.details || errorData.error || 'Failed to delete image');
-      }
-
-      // Update original project state to match new state
-      setOriginalProject({
-        ...project,
-        images: newImages
-      });
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to delete image');
-      // Revert the change if the save failed
-      setProject(project);
-    } finally {
-      setImageToDelete(null);
-    }
   };
 
   if (isLoading) {
@@ -435,26 +262,14 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
               <div className="h-32 bg-gray-200 rounded w-full animate-pulse" />
             </div>
 
-            {/* Main Image Upload Skeleton */}
+            {/* Images Skeleton */}
             <div className="mb-6">
               <div className="h-4 bg-gray-200 rounded w-1/6 mb-2 animate-pulse" />
-              <div className="h-40 bg-gray-200 rounded w-full animate-pulse" />
-            </div>
-
-            {/* Additional Images Upload Skeleton */}
-            <div className="mb-6">
-              <div className="h-4 bg-gray-200 rounded w-1/6 mb-2 animate-pulse" />
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                {[...Array(4)].map((_, index) => (
-                  <div key={index} className="aspect-square bg-gray-200 rounded animate-pulse" />
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="aspect-square bg-gray-200 rounded-lg animate-pulse" />
                 ))}
               </div>
-            </div>
-
-            {/* Buttons Skeleton */}
-            <div className="flex justify-end space-x-4">
-              <div className="h-10 bg-gray-200 rounded w-24 animate-pulse" />
-              <div className="h-10 bg-gray-200 rounded w-24 animate-pulse" />
             </div>
           </div>
         </main>
@@ -465,7 +280,16 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
   if (!project) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-600">הפרויקט לא נמצא</div>
+        <div className="text-center">
+          <h2 className="text-2xl font-semibold text-gray-900">Project not found</h2>
+          <p className="mt-2 text-gray-600">The project you&apos;re looking for doesn&apos;t exist or has been deleted.</p>
+          <button
+            onClick={() => router.push('/admin')}
+            className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gray-800 hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+          >
+            Return to Dashboard
+          </button>
+        </div>
       </div>
     );
   }
@@ -476,21 +300,16 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
-            <h1 className="text-2xl font-light text-gray-900">עריכת פרויקט</h1>
-            <div className="flex space-x-4">
-              <button
-                onClick={handleCancel}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors duration-200"
-              >
-                ביטול
-              </button>
-              <button
-                onClick={handleSave}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gray-800 hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors duration-200"
-              >
-                שמירת שינויים
-              </button>
-            </div>
+            <h1 className="text-2xl font-light text-gray-900">ערוך פרויקט</h1>
+            <button
+              onClick={handleCancel}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors duration-200"
+            >
+              <span>חזרה ללוח הבקרה</span>
+              <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+            </button>
           </div>
         </div>
       </header>
@@ -498,11 +317,6 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-          <div className="px-6 py-5 border-b border-gray-200">
-            <h2 className="text-lg font-medium text-gray-900">פרטי הפרויקט</h2>
-            <p className="mt-1 text-sm text-gray-500">עריכת פרטי הפרויקט</p>
-          </div>
-
           <div className="p-6 space-y-6">
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
@@ -510,187 +324,125 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
               </div>
             )}
 
-            {/* Title */}
-            <div>
-              <label htmlFor="title" className="block text-sm font-medium text-gray-700">
-                כותרת *
-              </label>
-              <input
-                type="text"
-                id="title"
-                name="title"
-                value={project?.title || ''}
-                onChange={handleInputChange}
-                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm text-right ${
-                  fieldErrors.title ? 'border-red-300' : 'border-gray-300'
-                }`}
-                required
-                dir="rtl"
-              />
-              {fieldErrors.title && (
-                <p className="mt-1 text-sm text-red-600">{fieldErrors.title}</p>
-              )}
-            </div>
-
-            {/* Summary */}
-            <div>
-              <label htmlFor="summary" className="block text-sm font-medium text-gray-700">
-                תקציר
-              </label>
-              <textarea
-                id="summary"
-                name="summary"
-                rows={3}
-                value={project?.summary || ''}
-                onChange={handleInputChange}
-                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm text-right ${
-                  fieldErrors.summary ? 'border-red-300' : 'border-gray-300'
-                }`}
-                dir="rtl"
-              />
-              {fieldErrors.summary && (
-                <p className="mt-1 text-sm text-red-600">{fieldErrors.summary}</p>
-              )}
-            </div>
-
-            {/* Description */}
-            <div>
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-                תיאור
-              </label>
-              <textarea
-                id="description"
-                name="description"
-                rows={6}
-                value={project?.description || ''}
-                onChange={handleInputChange}
-                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm text-right ${
-                  fieldErrors.description ? 'border-red-300' : 'border-gray-300'
-                }`}
-                dir="rtl"
-              />
-              {fieldErrors.description && (
-                <p className="mt-1 text-sm text-red-600">{fieldErrors.description}</p>
-              )}
-            </div>
-
-            {/* Images */}
-            <div>
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium text-gray-900">תמונות</h3>
-                <div className="relative">
-                  <input
-                    type="file"
-                    id="image-upload"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="hidden"
-                  />
-                  <label
-                    htmlFor="image-upload"
-                    className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gray-800 hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors duration-200 cursor-pointer ${
-                      isUploading ? 'opacity-50 cursor-not-allowed' : ''
-                    }`}
-                  >
-                    {isUploading ? (
-                      <div className="flex items-center">
-                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Uploading...
-                      </div>
-                    ) : (
-                      <div className="flex items-center">
-                        <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                        </svg>
-                        Add
-                      </div>
-                    )}
-                  </label>
-                </div>
+            <div className="space-y-4">
+              {/* Title */}
+              <div>
+                <label htmlFor="title" className="block text-sm font-medium text-gray-700">
+                  כותרת *
+                </label>
+                <input
+                  type="text"
+                  id="title"
+                  name="title"
+                  value={project.title}
+                  onChange={handleInputChange}
+                  className={`mt-1 block w-full rounded-md shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm text-right ${
+                    fieldErrors.title ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  required
+                  dir="rtl"
+                />
+                {fieldErrors.title && (
+                  <p className="mt-1 text-sm text-red-600">{fieldErrors.title}</p>
+                )}
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {project.images && project.images.map((image, index) => (
-                  <div key={index} className="space-y-2">
-                    <div 
-                      className={`relative aspect-square rounded-lg overflow-hidden bg-gray-100 cursor-pointer ${
-                        image.url === project.mainImage.url ? 'ring-4 ring-indigo-500' : ''
-                      }`}
-                      onClick={() => handleImageClick(index)}
-                    >
-                      <Image
-                        src={image.url}
-                        alt={image.alt || project.title}
-                        fill
-                        className="object-cover"
-                        unoptimized
-                      />
-                      <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-50 transition-opacity duration-200 flex items-center justify-center opacity-0 hover:opacity-100">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleImageDelete(index);
-                          }}
-                          className="text-white bg-red-600 hover:bg-red-700 rounded-full p-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                        >
-                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                    <textarea
-                      dir="rtl"
-                      value={image.description || ''}
-                      onChange={(e) => {
-                        const newImages = [...project.images];
-                        newImages[index] = {
-                          ...newImages[index],
-                          description: e.target.value
-                        };
-                        setProject({ ...project, images: newImages });
-                      }}
-                      placeholder="תיאור התמונה..."
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-right"
-                      rows={2}
-                    />
-                  </div>
-                ))}
+
+              {/* Summary */}
+              <div>
+                <label htmlFor="summary" className="block text-sm font-medium text-gray-700">
+                  סיכום
+                </label>
+                <textarea
+                  id="summary"
+                  name="summary"
+                  value={project.summary || ''}
+                  onChange={handleInputChange}
+                  rows={3}
+                  className={`mt-1 block w-full rounded-md shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm text-right ${
+                    fieldErrors.summary ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  dir="rtl"
+                />
+                {fieldErrors.summary && (
+                  <p className="mt-1 text-sm text-red-600">{fieldErrors.summary}</p>
+                )}
               </div>
+
+              {/* Description */}
+              <div>
+                <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+                  תיאור
+                </label>
+                <textarea
+                  id="description"
+                  name="description"
+                  value={project.description || ''}
+                  onChange={handleInputChange}
+                  rows={6}
+                  className={`mt-1 block w-full rounded-md shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm text-right ${
+                    fieldErrors.description ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  dir="rtl"
+                />
+                {fieldErrors.description && (
+                  <p className="mt-1 text-sm text-red-600">{fieldErrors.description}</p>
+                )}
+              </div>
+
+              {/* Images */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  תמונות הפרויקט
+                </label>
+                <ImageUploader
+                  images={project.images}
+                  onImagesChange={(newImages) => setProject({ ...project, images: newImages })}
+                  mainImageIndex={project.images.findIndex(img => img.url === project.mainImage.url)}
+                  onMainImageChange={(index) => setProject({ ...project, mainImage: project.images[index] })}
+                  onImageDelete={handleImageDelete}
+                />
+              </div>
+            </div>
+
+            {/* Form Actions */}
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors duration-200"
+              >
+                <span>ביטול</span>
+                <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={isSubmitting}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gray-800 hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>שומר שינויים...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>שמור שינויים</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
       </main>
-
-      {/* Delete Image Confirmation Modal */}
-      <ConfirmationModal
-        isOpen={imageToDelete !== null && !showMainImageWarning}
-        onClose={() => setImageToDelete(null)}
-        onConfirm={handleConfirmImageDelete}
-        title="מחק תמונה"
-        message="האם אתה בטוח שברצונך למחוק תמונה זו? פעולה זו אינה ניתנת לביטול."
-        confirmText="מחק תמונה"
-        cancelText="ביטול"
-      />
-
-      {/* Main Image Warning Modal */}
-      <ConfirmationModal
-        isOpen={showMainImageWarning}
-        onClose={() => {
-          setShowMainImageWarning(false);
-          setImageToDelete(null);
-        }}
-        onConfirm={() => {
-          setShowMainImageWarning(false);
-          setImageToDelete(null);
-        }}
-        title="אזהרת תמונה ראשית"
-        message="זוהי התמונה הראשית. אנא בחר תמונה אחרת כתמונה ראשית לפני מחיקת תמונה זו."
-        confirmText="אישור"
-        cancelText="ביטול"
-      />
 
       {/* Unsaved Changes Modal */}
       <ConfirmationModal
@@ -701,6 +453,17 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
         message="יש לך שינויים שלא נשמרו. האם אתה בטוח שברצונך לעזוב?"
         confirmText="צא"
         cancelText="השאר"
+      />
+
+      {/* Main Image Warning Modal */}
+      <ConfirmationModal
+        isOpen={showMainImageWarning}
+        onClose={() => setShowMainImageWarning(false)}
+        onConfirm={() => setShowMainImageWarning(false)}
+        title="אזהרת תמונה ראשית"
+        message="זוהי התמונה הראשית. אנא בחר תמונה אחרת כתמונה ראשית לפני מחיקת תמונה זו."
+        confirmText="אישור"
+        cancelText="ביטול"
       />
     </div>
   );
