@@ -2,6 +2,7 @@ import { loadProjects } from '@/lib/mongodb/projectLoader';
 import Link from 'next/link';
 import { AnimatedSection } from '@/components/AnimatedSection';
 import { ProjectImage } from '@/components/ProjectImage';
+import MobileScroll from '@/components/MobileScroll';
 
 export default async function Home() {
   console.log('=== Starting Home Page Render ===');
@@ -19,6 +20,7 @@ export default async function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      <MobileScroll />
       {/* Hero Section */}
       <section className="relative h-screen">
         <div className="absolute inset-0">
