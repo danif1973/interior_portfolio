@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import ConfirmationModal from '@/components/ConfirmationModal';
+import { PROJECT_VALIDATION, projectSchema, type ProjectFormData } from '@/lib/validation';
 
 interface ProjectImage {
   url: string;
@@ -13,14 +14,10 @@ interface ProjectImage {
   contentType?: string;
 }
 
-interface Project {
+interface Project extends ProjectFormData {
   id: string;
-  title: string;
-  summary: string;
-  description: string;
-  mainImage: ProjectImage;
   images: ProjectImage[];
-  directory: string;
+  mainImage: ProjectImage;
 }
 
 export default function EditProjectPage({ params }: { params: { id: string } }) {
@@ -29,6 +26,7 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
   const [originalProject, setOriginalProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof ProjectFormData, string>>>({});
   const router = useRouter();
   const [isUploading, setIsUploading] = useState(false);
   const [imageToDelete, setImageToDelete] = useState<number | null>(null);
@@ -84,17 +82,104 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
     });
   };
 
+  const validateField = (name: keyof ProjectFormData, value: string) => {
+    const trimmedValue = value.trim();
+    
+    // Handle title validation (required field)
+    if (name === 'title') {
+      if (!trimmedValue) {
+        setFieldErrors((prev) => ({ ...prev, [name]: PROJECT_VALIDATION.ERROR_MESSAGES.title.required }));
+        return;
+      }
+      if (trimmedValue.length > PROJECT_VALIDATION.MAX_LENGTHS.title) {
+        setFieldErrors((prev) => ({ ...prev, [name]: PROJECT_VALIDATION.ERROR_MESSAGES.title.maxLength }));
+        return;
+      }
+      if (!PROJECT_VALIDATION.PATTERN.test(trimmedValue)) {
+        setFieldErrors((prev) => ({ ...prev, [name]: PROJECT_VALIDATION.ERROR_MESSAGES.title.pattern }));
+        return;
+      }
+      setFieldErrors((prev) => ({ ...prev, [name]: undefined }));
+      return;
+    }
+
+    // Handle summary validation (optional field)
+    if (name === 'summary') {
+      if (!trimmedValue) {
+        setFieldErrors((prev) => ({ ...prev, [name]: undefined }));
+        return;
+      }
+      // Only validate if there's a value
+      if (trimmedValue.length > PROJECT_VALIDATION.MAX_LENGTHS.summary) {
+        setFieldErrors((prev) => ({ ...prev, [name]: PROJECT_VALIDATION.ERROR_MESSAGES.summary.maxLength }));
+        return;
+      }
+      if (!PROJECT_VALIDATION.PATTERN.test(trimmedValue)) {
+        setFieldErrors((prev) => ({ ...prev, [name]: PROJECT_VALIDATION.ERROR_MESSAGES.summary.pattern }));
+        return;
+      }
+      setFieldErrors((prev) => ({ ...prev, [name]: undefined }));
+      return;
+    }
+
+    // Handle description validation (optional field)
+    if (name === 'description') {
+      if (!trimmedValue) {
+        setFieldErrors((prev) => ({ ...prev, [name]: undefined }));
+        return;
+      }
+      // Only validate if there's a value
+      if (trimmedValue.length > PROJECT_VALIDATION.MAX_LENGTHS.description) {
+        setFieldErrors((prev) => ({ ...prev, [name]: PROJECT_VALIDATION.ERROR_MESSAGES.description.maxLength }));
+        return;
+      }
+      if (!PROJECT_VALIDATION.PATTERN.test(trimmedValue)) {
+        setFieldErrors((prev) => ({ ...prev, [name]: PROJECT_VALIDATION.ERROR_MESSAGES.description.pattern }));
+        return;
+      }
+      setFieldErrors((prev) => ({ ...prev, [name]: undefined }));
+      return;
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    if (!project) return;
+    
+    setProject(prev => ({ ...prev!, [name]: value }));
+    validateField(name as keyof ProjectFormData, value);
+  };
+
   const handleSave = async () => {
     if (!project) return;
 
     try {
+      // Validate all fields
+      const result = projectSchema.safeParse({
+        title: project.title,
+        summary: project.summary,
+        description: project.description,
+      });
+
+      if (!result.success) {
+        const errors: Partial<Record<keyof ProjectFormData, string>> = {};
+        result.error.errors.forEach(err => {
+          const path = err.path[0] as keyof ProjectFormData;
+          errors[path] = err.message;
+        });
+        setFieldErrors(errors);
+        setError('יש לתקן את השגיאות בטופס');
+        return; // Stop here if validation fails
+      }
+
+      setError(null); // Clear any previous errors
       console.log('Starting save process for project:', project.id);
       
       // Create a FormData object for the update
       const formData = new FormData();
-      formData.append('title', project.title);
-      formData.append('summary', project.summary);
-      formData.append('description', project.description);
+      formData.append('title', project.title.trim());
+      formData.append('summary', project.summary?.trim() || '');
+      formData.append('description', project.description?.trim() || '');
       
       // Find the index of the main image in the updated images array
       const mainImageIndex = project.images.findIndex(img => img.url === project.mainImage.url);
@@ -132,7 +217,8 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
       if (!response.ok) {
         const errorData = await response.json();
         console.error('Save failed:', errorData);
-        throw new Error(errorData.details || errorData.error || 'Failed to save project');
+        setError(errorData.details || errorData.error || 'Failed to save project');
+        return; // Stop here if the save fails
       }
 
       const savedProject = await response.json();
@@ -150,8 +236,26 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || !event.target.files[0] || !project) return;
 
-    setIsUploading(true);
     const file = event.target.files[0];
+    
+    // Check if an image with the same name already exists
+    const existingNames = new Set(project.images.map(img => {
+      // Get the filename from the alt text which contains the original filename
+      const altParts = img.alt.split(' - ');
+      return altParts[altParts.length - 1] || ''; // Get the last part after the last ' - '
+    }));
+
+    console.log('Checking for duplicates:', {
+      newFile: file.name,
+      existingNames: Array.from(existingNames)
+    });
+
+    if (existingNames.has(file.name)) {
+      console.log('Duplicate image detected:', file.name);
+      return; // Silently ignore duplicate images
+    }
+
+    setIsUploading(true);
     console.log('Uploading file:', file.name, file.type);
 
     try {
@@ -169,9 +273,9 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
 
       // Create a FormData object for the update
       const formData = new FormData();
-      formData.append('title', project.title);
-      formData.append('summary', project.summary);
-      formData.append('description', project.description);
+      formData.append('title', project.title.trim());
+      formData.append('summary', project.summary?.trim() || '');
+      formData.append('description', project.description?.trim() || '');
       
       // Find the index of the main image in the updated images array
       const mainImageIndex = project.images.findIndex(img => img.url === project.mainImage.url);
@@ -253,9 +357,9 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
     // Save the changes immediately
     try {
       const formData = new FormData();
-      formData.append('title', project.title);
-      formData.append('summary', project.summary);
-      formData.append('description', project.description);
+      formData.append('title', project.title.trim());
+      formData.append('summary', project.summary?.trim() || '');
+      formData.append('description', project.description?.trim() || '');
       
       // Find the index of the main image in the updated images array
       const mainImageIndex = newImages.findIndex(img => img.url === project.mainImage.url);
@@ -358,14 +462,6 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
     );
   }
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-red-600">שגיאה: {error}</div>
-      </div>
-    );
-  }
-
   if (!project) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -384,7 +480,7 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
             <div className="flex space-x-4">
               <button
                 onClick={handleCancel}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gray-800 hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors duration-200"
+                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors duration-200"
               >
                 ביטול
               </button>
@@ -408,19 +504,32 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
           </div>
 
           <div className="p-6 space-y-6">
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                {error}
+              </div>
+            )}
+
             {/* Title */}
             <div>
               <label htmlFor="title" className="block text-sm font-medium text-gray-700">
-                כותרת
+                כותרת *
               </label>
               <input
                 type="text"
                 id="title"
-                value={project.title}
-                onChange={(e) => setProject({ ...project, title: e.target.value })}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm text-right"
+                name="title"
+                value={project?.title || ''}
+                onChange={handleInputChange}
+                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm text-right ${
+                  fieldErrors.title ? 'border-red-300' : 'border-gray-300'
+                }`}
+                required
                 dir="rtl"
               />
+              {fieldErrors.title && (
+                <p className="mt-1 text-sm text-red-600">{fieldErrors.title}</p>
+              )}
             </div>
 
             {/* Summary */}
@@ -430,12 +539,18 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
               </label>
               <textarea
                 id="summary"
+                name="summary"
                 rows={3}
-                value={project.summary}
-                onChange={(e) => setProject({ ...project, summary: e.target.value })}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm text-right"
+                value={project?.summary || ''}
+                onChange={handleInputChange}
+                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm text-right ${
+                  fieldErrors.summary ? 'border-red-300' : 'border-gray-300'
+                }`}
                 dir="rtl"
               />
+              {fieldErrors.summary && (
+                <p className="mt-1 text-sm text-red-600">{fieldErrors.summary}</p>
+              )}
             </div>
 
             {/* Description */}
@@ -445,12 +560,18 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
               </label>
               <textarea
                 id="description"
+                name="description"
                 rows={6}
-                value={project.description}
-                onChange={(e) => setProject({ ...project, description: e.target.value })}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm text-right"
+                value={project?.description || ''}
+                onChange={handleInputChange}
+                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm text-right ${
+                  fieldErrors.description ? 'border-red-300' : 'border-gray-300'
+                }`}
                 dir="rtl"
               />
+              {fieldErrors.description && (
+                <p className="mt-1 text-sm text-red-600">{fieldErrors.description}</p>
+              )}
             </div>
 
             {/* Images */}
@@ -579,7 +700,7 @@ export default function EditProjectPage({ params }: { params: { id: string } }) 
         title="שינויים שלא נשמרו"
         message="יש לך שינויים שלא נשמרו. האם אתה בטוח שברצונך לעזוב?"
         confirmText="צא"
-        cancelText="ביטול"
+        cancelText="השאר"
       />
     </div>
   );

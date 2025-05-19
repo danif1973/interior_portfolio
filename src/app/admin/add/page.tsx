@@ -5,41 +5,12 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { z } from 'zod';
 import ConfirmationModal from '../../../components/ConfirmationModal';
-
-// Schema for project validation
-const projectSchema = z.object({
-  title: z.string()
-    .min(1, 'כותרת היא שדה חובה')
-    .max(100, 'הכותרת חייבת להיות קצרה מ-100 תווים')
-    .regex(/^[\p{L}\p{N}\s\-_.,!?()]+$/u, 'הכותרת יכולה להכיל רק אותיות, מספרים, רווחים והסימנים הבאים: -_.,!?()')
-    .transform(str => str.trim()),
-  summary: z.string()
-    .max(200, 'הסיכום חייב להיות קצר מ-200 תווים')
-    .regex(/^[\p{L}\p{N}\p{P}\s]*$/u, 'הסיכום יכול להכיל רק אותיות, מספרים, סימני פיסוק ורווחים')
-    .transform(str => str.trim())
-    .optional(),
-  description: z.string()
-    .max(1000, 'התיאור חייב להיות קצר מ-1000 תווים')
-    .regex(/^[\p{L}\p{N}\p{P}\s]*$/u, 'התיאור יכול להכיל רק אותיות, מספרים, סימני פיסוק ורווחים')
-    .transform(str => str.trim())
-    .optional(),
-});
-
-// Sanitize input to prevent XSS
-const sanitizeInput = (input: string): string => {
-  return input
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-};
-
-type ProjectFormData = z.infer<typeof projectSchema>;
+import { PROJECT_VALIDATION, projectSchema, type ProjectFormData } from '../../../lib/validation';
 
 interface ImageFile {
   file: File;
   preview: string;
+  description: string;
 }
 
 export default function AddProject() {
@@ -57,24 +28,69 @@ export default function AddProject() {
   const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
 
   const validateField = (name: keyof ProjectFormData, value: string) => {
-    try {
-      // Sanitize input before validation
-      const sanitizedValue = sanitizeInput(value);
-      projectSchema.shape[name].parse(sanitizedValue);
-      setFieldErrors(prev => ({ ...prev, [name]: undefined }));
-    } catch (err) {
-      if (err instanceof z.ZodError) {
-        setFieldErrors(prev => ({ ...prev, [name]: err.errors[0].message }));
+    const trimmedValue = value.trim();
+    
+    // Handle title validation (required field)
+    if (name === 'title') {
+      if (!trimmedValue) {
+        setFieldErrors((prev) => ({ ...prev, [name]: PROJECT_VALIDATION.ERROR_MESSAGES.title.required }));
+        return;
       }
+      if (trimmedValue.length > PROJECT_VALIDATION.MAX_LENGTHS.title) {
+        setFieldErrors((prev) => ({ ...prev, [name]: PROJECT_VALIDATION.ERROR_MESSAGES.title.maxLength }));
+        return;
+      }
+      if (!PROJECT_VALIDATION.PATTERN.test(trimmedValue)) {
+        setFieldErrors((prev) => ({ ...prev, [name]: PROJECT_VALIDATION.ERROR_MESSAGES.title.pattern }));
+        return;
+      }
+      setFieldErrors((prev) => ({ ...prev, [name]: undefined }));
+      return;
+    }
+
+    // Handle summary validation (optional field)
+    if (name === 'summary') {
+      if (!trimmedValue) {
+        setFieldErrors((prev) => ({ ...prev, [name]: undefined }));
+        return;
+      }
+      // Only validate if there's a value
+      if (trimmedValue.length > PROJECT_VALIDATION.MAX_LENGTHS.summary) {
+        setFieldErrors((prev) => ({ ...prev, [name]: PROJECT_VALIDATION.ERROR_MESSAGES.summary.maxLength }));
+        return;
+      }
+      if (!PROJECT_VALIDATION.PATTERN.test(trimmedValue)) {
+        setFieldErrors((prev) => ({ ...prev, [name]: PROJECT_VALIDATION.ERROR_MESSAGES.summary.pattern }));
+        return;
+      }
+      setFieldErrors((prev) => ({ ...prev, [name]: undefined }));
+      return;
+    }
+
+    // Handle description validation (optional field)
+    if (name === 'description') {
+      if (!trimmedValue) {
+        setFieldErrors((prev) => ({ ...prev, [name]: undefined }));
+        return;
+      }
+      // Only validate if there's a value
+      if (trimmedValue.length > PROJECT_VALIDATION.MAX_LENGTHS.description) {
+        setFieldErrors((prev) => ({ ...prev, [name]: PROJECT_VALIDATION.ERROR_MESSAGES.description.maxLength }));
+        return;
+      }
+      if (!PROJECT_VALIDATION.PATTERN.test(trimmedValue)) {
+        setFieldErrors((prev) => ({ ...prev, [name]: PROJECT_VALIDATION.ERROR_MESSAGES.description.pattern }));
+        return;
+      }
+      setFieldErrors((prev) => ({ ...prev, [name]: undefined }));
+      return;
     }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    // Sanitize input before setting state
-    const sanitizedValue = sanitizeInput(value);
-    setFormData(prev => ({ ...prev, [name]: sanitizedValue }));
-    validateField(name as keyof ProjectFormData, sanitizedValue);
+    setFormData(prev => ({ ...prev, [name]: value }));
+    validateField(name as keyof ProjectFormData, value);
   };
 
   const handleFolderSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -82,17 +98,20 @@ export default function AddProject() {
     if (!files) return;
 
     const imageFiles: ImageFile[] = [];
+    const existingNames = new Set(images.map(img => img.file.name));
+
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      if (file.type.startsWith('image/')) {
+      if (file.type.startsWith('image/') && !existingNames.has(file.name)) {
         const preview = URL.createObjectURL(file);
-        imageFiles.push({ file, preview });
+        imageFiles.push({ file, preview, description: '' });
+        existingNames.add(file.name);
       }
     }
 
     setImages(prevImages => [...prevImages, ...imageFiles]);
-    if (images.length === 0) {
-      setMainImageIndex(0); // Only reset main image if there were no images before
+    if (images.length === 0 && imageFiles.length > 0) {
+      setMainImageIndex(0);
     }
   };
 
@@ -109,14 +128,17 @@ export default function AddProject() {
     if (!items) return;
 
     const imageFiles: ImageFile[] = [];
+    const existingNames = new Set(images.map(img => img.file.name));
+
     const processEntry = async (entry: FileSystemEntry) => {
       if (entry.isFile) {
         const file = await new Promise<File>((resolve) => {
           (entry as FileSystemFileEntry).file(resolve);
         });
-        if (file.type.startsWith('image/')) {
+        if (file.type.startsWith('image/') && !existingNames.has(file.name)) {
           const preview = URL.createObjectURL(file);
-          imageFiles.push({ file, preview });
+          imageFiles.push({ file, preview, description: '' });
+          existingNames.add(file.name);
         }
       } else if (entry.isDirectory) {
         const reader = (entry as FileSystemDirectoryEntry).createReader();
@@ -140,8 +162,8 @@ export default function AddProject() {
     }
 
     setImages(prevImages => [...prevImages, ...imageFiles]);
-    if (images.length === 0) {
-      setMainImageIndex(0); // Only reset main image if there were no images before
+    if (images.length === 0 && imageFiles.length > 0) {
+      setMainImageIndex(0);
     }
   };
 
@@ -169,14 +191,25 @@ export default function AddProject() {
 
       // Create FormData for file upload
       const formDataToSend = new FormData();
-      formDataToSend.append('title', formData.title);
-      formDataToSend.append('summary', formData.summary || '');
-      formDataToSend.append('description', formData.description || '');
+      formDataToSend.append('title', formData.title.trim());
+      formDataToSend.append('summary', formData.summary?.trim() || '');
+      formDataToSend.append('description', formData.description?.trim() || '');
       formDataToSend.append('mainImageIndex', mainImageIndex.toString());
 
-      // Append all images
+      // Append all images with their descriptions
       images.forEach((image, index) => {
+        // Create image data object similar to edit page
+        const imageData = {
+          file: image.file,
+          alt: `${formData.title} - ${image.file.name}`,
+          description: image.description || '',
+          contentType: image.file.type
+        };
+        
+        // Append the image file
         formDataToSend.append(`image-${index}`, image.file);
+        // Append the image data as JSON
+        formDataToSend.append(`image-data-${index}`, JSON.stringify(imageData));
       });
 
       const response = await fetch('/api/projects', {
@@ -270,10 +303,11 @@ export default function AddProject() {
                   name="title"
                   value={formData.title}
                   onChange={handleInputChange}
-                  className={`mt-1 block w-full rounded-md shadow-sm focus:ring-gray-500 focus:border-gray-500 ${
+                  className={`mt-1 block w-full rounded-md shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm text-right ${
                     fieldErrors.title ? 'border-red-300' : 'border-gray-300'
                   }`}
                   required
+                  dir="rtl"
                 />
                 {fieldErrors.title && (
                   <p className="mt-1 text-sm text-red-600">{fieldErrors.title}</p>
@@ -284,15 +318,16 @@ export default function AddProject() {
                 <label htmlFor="summary" className="block text-sm font-medium text-gray-700">
                   סיכום
                 </label>
-                <input
-                  type="text"
+                <textarea
                   id="summary"
                   name="summary"
                   value={formData.summary}
                   onChange={handleInputChange}
-                  className={`mt-1 block w-full rounded-md shadow-sm focus:ring-gray-500 focus:border-gray-500 ${
+                  rows={3}
+                  className={`mt-1 block w-full rounded-md shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm text-right ${
                     fieldErrors.summary ? 'border-red-300' : 'border-gray-300'
                   }`}
+                  dir="rtl"
                 />
                 {fieldErrors.summary && (
                   <p className="mt-1 text-sm text-red-600">{fieldErrors.summary}</p>
@@ -308,10 +343,11 @@ export default function AddProject() {
                   name="description"
                   value={formData.description}
                   onChange={handleInputChange}
-                  rows={4}
-                  className={`mt-1 block w-full rounded-md shadow-sm focus:ring-gray-500 focus:border-gray-500 ${
+                  rows={6}
+                  className={`mt-1 block w-full rounded-md shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm text-right ${
                     fieldErrors.description ? 'border-red-300' : 'border-gray-300'
                   }`}
+                  dir="rtl"
                 />
                 {fieldErrors.description && (
                   <p className="mt-1 text-sm text-red-600">{fieldErrors.description}</p>
@@ -375,54 +411,70 @@ export default function AddProject() {
                     onDrop={handleDrop}
                   >
                     {images.map((image, index) => (
-                      <div
-                        key={index}
-                        className={`relative aspect-square rounded-lg overflow-hidden cursor-pointer border-2 ${
-                          mainImageIndex === index ? 'border-indigo-500' : 'border-transparent'
-                        }`}
-                        onClick={() => setMainImageIndex(index)}
-                      >
-                        <Image
-                          src={image.preview}
-                          alt={`Preview ${index + 1}`}
-                          fill
-                          className="object-cover"
-                        />
-                        <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-50 transition-opacity duration-200 flex items-center justify-center opacity-0 hover:opacity-100">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const newImages = [...images];
-                              newImages.splice(index, 1);
-                              setImages(newImages);
-                              if (mainImageIndex >= newImages.length) {
-                                setMainImageIndex(Math.max(0, newImages.length - 1));
-                              }
-                            }}
-                            className="text-white bg-red-600 hover:bg-red-700 rounded-full p-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                          >
-                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
-                        {mainImageIndex === index && (
-                          <div className="absolute inset-0 bg-indigo-500/20 flex items-center justify-center">
-                            <svg
-                              className="h-8 w-8 text-white"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
+                      <div key={index} className="space-y-2">
+                        <div
+                          className={`relative aspect-square rounded-lg overflow-hidden cursor-pointer border-2 ${
+                            mainImageIndex === index ? 'border-indigo-500' : 'border-transparent'
+                          }`}
+                          onClick={() => setMainImageIndex(index)}
+                        >
+                          <Image
+                            src={image.preview}
+                            alt={`Preview ${index + 1}`}
+                            fill
+                            className="object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-50 transition-opacity duration-200 flex items-center justify-center opacity-0 hover:opacity-100">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const newImages = [...images];
+                                newImages.splice(index, 1);
+                                setImages(newImages);
+                                if (mainImageIndex >= newImages.length) {
+                                  setMainImageIndex(Math.max(0, newImages.length - 1));
+                                }
+                              }}
+                              className="text-white bg-red-600 hover:bg-red-700 rounded-full p-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                             >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth="2"
-                                d="M5 13l4 4L19 7"
-                              />
-                            </svg>
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
                           </div>
-                        )}
+                          {mainImageIndex === index && (
+                            <div className="absolute inset-0 bg-indigo-500/20 flex items-center justify-center">
+                              <svg
+                                className="h-8 w-8 text-white"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth="2"
+                                  d="M5 13l4 4L19 7"
+                                />
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+                        <textarea
+                          dir="rtl"
+                          value={image.description}
+                          onChange={(e) => {
+                            const newImages = [...images];
+                            newImages[index] = {
+                              ...newImages[index],
+                              description: e.target.value
+                            };
+                            setImages(newImages);
+                          }}
+                          placeholder="תיאור התמונה..."
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-right"
+                          rows={2}
+                        />
                       </div>
                     ))}
                   </div>
@@ -472,7 +524,7 @@ export default function AddProject() {
         onConfirm={handleConfirmCancel}
         title="שינויים שלא נשמרו"
         message="יש לך שינויים שלא נשמרו. האם אתה בטוח שברצונך לעזוב?"
-        confirmText="עזוב"
+        confirmText="צא"
         cancelText="השאר"
       />
     </div>

@@ -43,7 +43,27 @@ export async function POST(request: NextRequest) {
     let index = 0;
     while (formData.has(`image-${index}`)) {
       const imageFile = formData.get(`image-${index}`) as File | null;
+      const imageDataStr = formData.get(`image-data-${index}`) as string;
+      
       if (!imageFile) break;
+
+      // Parse image data including description
+      let imageData = {
+        alt: `${title} - ${imageFile.name}`,
+        description: ''
+      };
+      
+      try {
+        if (imageDataStr) {
+          const parsedData = JSON.parse(imageDataStr);
+          imageData = {
+            ...imageData,
+            ...parsedData
+          };
+        }
+      } catch (e) {
+        console.error('Error parsing image data:', e);
+      }
 
       // Convert image to buffer
       const bytes = await imageFile.arrayBuffer();
@@ -51,8 +71,8 @@ export async function POST(request: NextRequest) {
       
       images.push({
         url: `data:${imageFile.type};base64,${buffer.toString('base64')}`,
-        alt: `${title} - ${imageFile.name}`,
-        description: '',
+        alt: imageData.alt,
+        description: imageData.description,
         data: buffer,
         contentType: imageFile.type
       });
