@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { AnimatedSection } from '@/components/AnimatedSection';
 import { ProjectImage } from '@/components/ProjectImage';
 import MobileScroll from '@/components/MobileScroll';
+import Copyright from '@/components/Copyright';
 
 export default async function Home() {
   console.log('=== Starting Home Page Render ===');
@@ -19,7 +20,7 @@ export default async function Home() {
   })));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <div className="min-h-screen bg-gradient-to-br from-gray-100 to-gray-400">
       <MobileScroll />
       {/* Hero Section */}
       <section className="relative h-screen">
@@ -97,10 +98,10 @@ export default async function Home() {
       <section className="py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <AnimatedSection className="text-center mb-16">
-            <h2 className="text-3xl font-light text-gray-900 mb-4">השירותים שלנו</h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            <h2 className="text-3xl font-light text-gray-900 mb-4">פתרונות עיצוב פנים מקיפים המותאמים לחזון הייחודי שלך</h2>
+            {/* <p className="text-lg text-gray-600 max-w-2xl mx-auto">
               פתרונות עיצוב פנים מקיפים המותאמים לחזון הייחודי שלך
-            </p>
+            </p> */}
           </AnimatedSection>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -163,6 +164,9 @@ export default async function Home() {
           </AnimatedSection>
         </div>
       </section>
+
+      {/* Copyright Section */}
+      <Copyright />
     </div>
   );
 }

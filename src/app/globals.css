@@ -24,3 +24,11 @@ body {
   color: var(--foreground);
   font-family: var(--font-heebo), Arial, Helvetica, sans-serif;
 }
+
+@font-face {
+  font-family: 'Dana Yad Alef Alef Alef Normal';
+  src: url('/fonts/DanaYadAlefAlefAlef-Normal.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}

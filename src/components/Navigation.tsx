@@ -5,12 +5,13 @@ import Link from 'next/link';
 export default function Navigation() {
   return (
     <>
-      {/* Footer */}
-      <footer className="bg-gray-900 text-white py-12">
-        <div className="container mx-auto px-4">
+      {/* Main Footer */}
+      <footer className="bg-gray-900 text-white mt-auto">
+        {/* Main Footer Content */}
+        <div className="container mx-auto px-4 py-12">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
-              <h4 className="text-lg font-medium mb-4">Follow Us</h4>
+              <h4 className="text-lg font-medium mb-4">Follow Me</h4>
               <div className="flex space-x-4">
                 <a href="https://www.facebook.com/natalie.engler.39" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition-colors duration-200">
                   <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
@@ -49,18 +50,13 @@ export default function Navigation() {
               </ul>
             </div>
             <div className="text-left">
-              <h3 className="text-3xl font-light mb-4">
-                <span className="text-4xl" style={{ fontFamily: 'var(--font-great-vibes)' }}>Natalie&apos;s Imagination</span>
+              <h3 className="text-2xl font-light mb-0">
+                <span className="text-4xl" style={{ fontFamily: 'var(--font-great-vibes)' }}>Natalie Engler</span>
               </h3>
               <p className="text-gray-400 [direction:ltr]">
-                Creating beautiful spaces that inspire.
+                Creating spaces that inspire.
               </p>
             </div>
-          </div>
-          <div className="mt-12 pt-8 border-t border-gray-800 text-center text-gray-400">
-            <p className="text-gray-400">
-              &copy; {new Date().getFullYear()} <span className="text-2xl" style={{ fontFamily: 'var(--font-great-vibes)' }}>Natalie&apos;s Imagination</span>. All rights reserved.
-            </p>
           </div>
         </div>
       </footer>
