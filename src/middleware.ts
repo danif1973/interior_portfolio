@@ -18,7 +18,7 @@ export async function middleware(request: NextRequest) {
       setCSRFToken(token, response);
       return response;
     } catch (error) {
-      logger.error('Failed to generate CSRF token:', error);
+      logger.error('Failed to generate CSRF token:', { error: error instanceof Error ? error.message : String(error) });
       return NextResponse.next();
     }
   }
