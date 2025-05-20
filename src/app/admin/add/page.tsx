@@ -92,6 +92,12 @@ export default function AddProject() {
     setIsSubmitting(true);
 
     try {
+      // Get CSRF token from meta tag
+      const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      if (!metaToken) {
+        throw new Error('CSRF token not found. Please refresh the page and try again.');
+      }
+
       // Validate all fields
       const result = projectSchema.safeParse(formData);
       if (!result.success) {
@@ -131,7 +137,11 @@ export default function AddProject() {
 
       const response = await fetch('/api/projects', {
         method: 'POST',
+        headers: {
+          'X-CSRF-Token': metaToken // Add CSRF token to headers
+        },
         body: formDataToSend,
+        credentials: 'include'
       });
 
       if (!response.ok) {
