@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Lato, Heebo, Great_Vibes } from "next/font/google";
 import "./globals.css";
 import Navigation from "@/components/Navigation";
-import { generateCSRFToken, setCSRFToken } from "@/lib/csrf-server";
 import { cookies } from 'next/headers';
 
 const lato = Lato({ 
@@ -35,22 +34,9 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Get existing token or generate new one
+  // Get token from cookies - middleware will ensure it exists
   const cookieStore = cookies();
-  let csrfToken = cookieStore.get('csrf_token')?.value;
-  
-  if (!csrfToken) {
-    try {
-      // Generate new token only if one doesn't exist
-      csrfToken = await generateCSRFToken();
-      // Set the token in the cookie
-      setCSRFToken(csrfToken);
-    } catch (error) {
-      console.error('Error generating CSRF token:', error);
-      // If token generation fails, use a fallback token
-      csrfToken = 'fallback-token';
-    }
-  }
+  const csrfToken = cookieStore.get('csrf_token')?.value || '';
 
   return (
     <html lang="he" dir="rtl" className={`${lato.className} ${heebo.variable} ${greatVibes.variable} min-h-screen bg-white`}>
