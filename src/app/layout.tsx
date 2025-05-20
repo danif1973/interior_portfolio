@@ -37,7 +37,7 @@ export default async function RootLayout({
   // Get token from cookies - middleware will ensure it exists
   const cookieStore = cookies();
   const csrfToken = cookieStore.get('csrf_token')?.value || '';
-c
+
   return (
     <html lang="he" dir="rtl" className={`${lato.className} ${heebo.variable} ${greatVibes.variable} min-h-screen bg-white`}>
       <head>
