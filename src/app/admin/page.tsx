@@ -28,7 +28,6 @@ export default function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
-  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
   const router = useRouter();
 
   const fetchProjects = async () => {
@@ -89,16 +88,42 @@ export default function AdminDashboard() {
     if (!projectToDelete) return;
 
     try {
-      const response = await fetch(`/api/projects/${encodeURIComponent(projectToDelete)}`, {
+      // Get CSRF token from meta tag
+      const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      console.log('Delete request - CSRF token from meta:', metaToken ? 'Found' : 'Missing');
+      console.log('Delete request - Current origin:', window.location.origin);
+
+      if (!metaToken) {
+        throw new Error('CSRF token not found in meta tag. Please refresh the page and try again.');
+      }
+
+      // Use absolute URL to ensure we're hitting the correct endpoint
+      const url = `${window.location.origin}/api/projects/${encodeURIComponent(projectToDelete)}`;
+      console.log('Delete request - Full URL:', url);
+
+      const response = await fetch(url, {
         method: 'DELETE',
+        headers: {
+          'X-CSRF-Token': metaToken, // Use uppercase header name as expected by middleware
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
       });
 
+      console.log('Delete response status:', response.status);
+      console.log('Delete response headers:', Object.fromEntries(response.headers.entries()));
+      
       if (response.ok) {
+        console.log('Project deleted successfully');
         setDeleteModalOpen(false);
         setProjectToDelete(null);
         await fetchProjects();
       } else {
-        console.error('Failed to delete project');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Failed to delete project:', {
+          status: response.status,
+          error: errorData
+        });
       }
     } catch (error) {
       console.error('Error deleting project:', error);
@@ -207,9 +232,8 @@ export default function AdminDashboard() {
                         alt={project.mainImage.alt || project.title}
                         fill
                         className="object-cover"
-                        onError={(e) => {
+                        onError={() => {
                           console.error('Image failed to load:', project.mainImage.url);
-                          setFailedImages(prev => new Set([...prev, project.mainImage.url]));
                         }}
                         unoptimized
                         priority
