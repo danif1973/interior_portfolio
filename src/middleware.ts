@@ -32,23 +32,15 @@ export async function middleware(request: NextRequest) {
     return csrfResponse;
   }
 
-  // Check if the request is for the admin page (excluding login)
-  if (request.nextUrl.pathname.startsWith('/admin') && 
-      !request.nextUrl.pathname.startsWith('/admin/login')) {
-    // Get the session token from cookies
+  // Only protect /admin routes (but not /admin/login)
+  const { pathname } = request.nextUrl;
+  if (pathname.startsWith('/admin') && pathname !== '/admin/login') {
     const sessionToken = request.cookies.get('admin_session')?.value;
-    logger.debug('Session check', {
-      hasToken: !!sessionToken,
-      path: request.nextUrl.pathname
-    }, request);
-
-    // If no session token exists, redirect to login
     if (!sessionToken) {
-      logger.info('Redirecting to login', {
-        from: request.nextUrl.pathname
-      }, request);
       return NextResponse.redirect(new URL('/admin/login', request.url));
     }
+    // Do not check DB here! Let the page/server component do it.
+    return NextResponse.next();
   }
 
   return NextResponse.next();

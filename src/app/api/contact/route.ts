@@ -27,9 +27,9 @@ export async function POST(request: NextRequest) {
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: process.env.EMAIL_USER, // Send to yourself
-      subject: `New Contact Form Submission - ${projectType} Project`,
+      subject: `קיבלת מייל חדש מהאתר`,
       html: `
-        <h2>New Contact Form Submission</h2>
+        <h2>התקבל מייל חדש מהאתר</h2>
         <p><strong>Name:</strong> ${name}</p>
         <p><strong>Email:</strong> ${email}</p>
         <p><strong>Phone:</strong> ${phone}</p>

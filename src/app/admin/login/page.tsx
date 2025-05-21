@@ -1,150 +1,507 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
+import { useEffect, useState, useCallback } from "react";
+import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
+import { XCircleIcon, ClockIcon } from "@heroicons/react/24/solid";
+import { fetchWithCSRF } from '@/lib/csrf-client';
 import { useRouter } from 'next/navigation';
-import Cookies from 'js-cookie';
-import { motion } from 'framer-motion';
 
-export default function AdminLogin() {
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+const PASSWORD_RULES = {
+  minLength: (pwd: string) => pwd.length >= 6,
+  hasLowercase: (pwd: string) => /[a-z]/.test(pwd),
+  hasUppercase: (pwd: string) => /[A-Z]/.test(pwd),
+  hasNumber: (pwd: string) => /\d/.test(pwd),
+  hasSpecial: (pwd: string) => /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(pwd),
+};
+
+export default function AdminAuthPage() {
+  const [isSet, setIsSet] = useState<boolean | null>(null);
+  const [mode, setMode] = useState<'login' | 'set' | 'change'>('login');
+  const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [cooldownEndTime, setCooldownEndTime] = useState<number | null>(null);
+  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+  const [attempts, setAttempts] = useState<number>(0);
+
+  // Form fields
+  const [oldPassword, setOldPassword] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showOld, setShowOld] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
   const router = useRouter();
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setIsLoading(true);
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const res = await fetch("/api/admin-auth/status");
+        const data = await res.json();
+        setIsSet(data.isSet);
+        setMode(data.isSet ? "login" : "set");
+      } catch (error: unknown) {
+        console.error('Failed to check authentication status:', error);
+        setError("Failed to check authentication status");
+      } finally {
+        setInitialLoading(false);
+      }
+    };
+    checkStatus();
+  }, []);
+
+  useEffect(() => {
+    const storedAttempts = localStorage.getItem('loginAttempts');
+    const storedAttemptsTime = localStorage.getItem('loginAttemptsTime');
+    const storedCooldown = localStorage.getItem('loginCooldown');
+    
+    const now = Date.now();
+    
+    // Check if attempts window has expired (1 minute)
+    if (storedAttemptsTime && now - parseInt(storedAttemptsTime) > 60000) {
+      // Reset attempts if window has expired
+      localStorage.removeItem('loginAttempts');
+      localStorage.removeItem('loginAttemptsTime');
+      setAttempts(0);
+    } else if (storedAttempts) {
+      setAttempts(parseInt(storedAttempts));
+    }
+    
+    if (storedCooldown) {
+      const cooldownTime = parseInt(storedCooldown);
+      if (cooldownTime > now) {
+        setCooldownEndTime(cooldownTime);
+      } else {
+        // Clear expired cooldown and attempts
+        localStorage.removeItem('loginCooldown');
+        localStorage.removeItem('loginAttempts');
+        localStorage.removeItem('loginAttemptsTime');
+      }
+    }
+  }, []);
+
+  // Update remaining seconds every second when in cooldown
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (cooldownEndTime) {
+      const updateRemainingTime = () => {
+        const now = Date.now();
+        if (now >= cooldownEndTime) {
+          setCooldownEndTime(null);
+          setRemainingSeconds(null);
+          setAttempts(0);
+          localStorage.removeItem('loginCooldown');
+          localStorage.removeItem('loginAttempts');
+          localStorage.removeItem('loginAttemptsTime');
+        } else {
+          setRemainingSeconds(Math.ceil((cooldownEndTime - now) / 1000));
+        }
+      };
+
+      // Update immediately
+      updateRemainingTime();
+      // Then update every second
+      timer = setInterval(updateRemainingTime, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [cooldownEndTime]);
+
+  const validatePassword = (pwd: string) => 
+    Object.values(PASSWORD_RULES).every(rule => rule(pwd));
+
+  const getPasswordValidation = (pwd: string) => ({
+    minLength: PASSWORD_RULES.minLength(pwd),
+    hasLowercase: PASSWORD_RULES.hasLowercase(pwd),
+    hasUppercase: PASSWORD_RULES.hasUppercase(pwd),
+    hasNumber: PASSWORD_RULES.hasNumber(pwd),
+    hasSpecial: PASSWORD_RULES.hasSpecial(pwd),
+  });
+
+  const handleContainerClick = useCallback((e: React.MouseEvent) => {
+    console.log('Container clicked', e.target);
+  }, []);
+
+  const handleSubmit = useCallback(async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
+
+    if (loading) {
+      return;
+    }
+
+    // Check for cooldown
+    if (cooldownEndTime && Date.now() < cooldownEndTime) {
+      const seconds = Math.ceil((cooldownEndTime - Date.now()) / 1000);
+      setRemainingSeconds(seconds);
+      setError(`נא להמתין ${seconds} שניות לפני ניסיון נוסף`);
+      return;
+    }
+
+    // Check attempts
+    if (attempts >= 3) {
+      const cooldownTime = Date.now() + 60000; // 1 minute cooldown
+      setCooldownEndTime(cooldownTime);
+      setRemainingSeconds(60);
+      localStorage.setItem('loginCooldown', cooldownTime.toString());
+      setError('יותר מדי ניסיונות כושלים. נא להמתין דקה לפני ניסיון נוסף');
+      return;
+    }
+    
+    setError(null);
+    setSuccess(null);
+    setLoading(true);
 
     try {
-      // In a real application, you would validate against a secure backend
-      if (password === 'admin123') {
-        // Set a session cookie
-        Cookies.set('admin_session', 'authenticated', { expires: 1 }); // Expires in 1 day
-        router.push('/admin');
-      } else {
-        setError('Invalid password');
+      const endpoint = mode === "login" 
+        ? "/api/admin-auth/login"
+        : mode === "set"
+        ? "/api/admin-auth/set"
+        : "/api/admin-auth/change";
+
+      const body = mode === "login"
+        ? { password }
+        : mode === "set"
+        ? { password, confirmPassword }
+        : { oldPassword, newPassword: password, confirmPassword };
+
+      const res = await fetchWithCSRF(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      let data: unknown = null;
+      let rawText: string | null = null;
+      try {
+        data = await res.json();
+      } catch {
+        try {
+          rawText = await res.text();
+        } catch {}
       }
-    } catch (err) {
-      console.error('Login error:', err);
-      setError('An error occurred during login');
+
+      if (!res.ok) {
+        let errorMsg = 'שגיאה לא ידועה. נא לנסות שוב מאוחר יותר';
+        
+        if (res.status === 401) {
+          // Increment attempts on failed login
+          const newAttempts = attempts + 1;
+          setAttempts(newAttempts);
+          localStorage.setItem('loginAttempts', newAttempts.toString());
+          localStorage.setItem('loginAttemptsTime', Date.now().toString());
+          
+          if (newAttempts >= 3) {
+            const cooldownTime = Date.now() + 60000;
+            setCooldownEndTime(cooldownTime);
+            setRemainingSeconds(60);
+            localStorage.setItem('loginCooldown', cooldownTime.toString());
+            errorMsg = 'יותר מדי ניסיונות כושלים. נא להמתין דקה לפני ניסיון נוסף';
+          } else {
+            errorMsg = `סיסמה שגויה. נותרו ${3 - newAttempts} ניסיונות`;
+          }
+        } else if (res.status === 403) {
+          if (data && typeof data === 'object' && data !== null) {
+            const reason = (data as { reason?: string }).reason;
+            if (reason?.includes('Too many failed attempts') || 
+                reason?.includes('rate limit exceeded')) {
+              const cooldownTime = Date.now() + 60000;
+              setCooldownEndTime(cooldownTime);
+              setRemainingSeconds(60);
+              localStorage.setItem('loginCooldown', cooldownTime.toString());
+              errorMsg = 'יותר מדי ניסיונות כושלים. נא להמתין דקה לפני ניסיון נוסף';
+            } else {
+              errorMsg = 'שגיאת אבטחה. נא לרענן את הדף ולנסות שוב';
+            }
+          } else {
+            errorMsg = 'שגיאת אבטחה. נא לרענן את הדף ולנסות שוב';
+          }
+        } else if (res.status === 400) {
+          if (data && typeof data === 'object' && data !== null && 'error' in data) {
+            errorMsg = (data as { error?: string }).error || errorMsg;
+          } else if (typeof data === 'string') {
+            errorMsg = data;
+          } else if (rawText) {
+            errorMsg = rawText;
+          }
+        } else if (res.status === 500) {
+          errorMsg = 'שגיאת שרת. נא לנסות שוב מאוחר יותר';
+        }
+        
+        console.error('Login error response:', { status: res.status, data, rawText });
+        throw new Error(errorMsg);
+      }
+
+      // Reset attempts and cooldown on successful login
+      if (mode === 'login') {
+        localStorage.removeItem('loginAttempts');
+        localStorage.removeItem('loginAttemptsTime');
+        localStorage.removeItem('loginCooldown');
+        setAttempts(0);
+        setCooldownEndTime(null);
+      }
+
+      setSuccess(
+        mode === "login"
+          ? "התחברת בהצלחה!"
+          : mode === "set"
+          ? "הסיסמה נשמרה בהצלחה!"
+          : "הסיסמה שונתה בהצלחה!"
+      );
+
+      if (mode === "login") {
+        setTimeout(() => {
+          router.push("/admin");
+        }, 500);
+      } else if (mode === "set") {
+        setIsSet(true);
+        setMode("login");
+      } else if (mode === "change") {
+        setMode("login");
+      }
+
+      setOldPassword("");
+      setPassword("");
+      setConfirmPassword("");
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'שגיאה לא ידועה. נא לנסות שוב מאוחר יותר';
+      setError(errorMessage);
+      console.error('Login error:', error);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
-  };
+  }, [loading, mode, password, confirmPassword, oldPassword, router, cooldownEndTime, attempts]);
+
+  const canSubmit = (() => {
+    if (mode === "login") {
+      return password.length > 0;
+    }
+    if (mode === "set") {
+      return validatePassword(password) && password === confirmPassword;
+    }
+    if (mode === "change") {
+      return oldPassword.length > 0 && validatePassword(password) && password === confirmPassword;
+    }
+    return false;
+  })();
+
+  if (initialLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-md text-center">
+          Loading...
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="w-full max-w-md"
-      >
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          {/* Header with decorative element */}
-          <div className="relative h-32 bg-gradient-to-r from-gray-700 to-gray-900">
-            <div className="absolute inset-0 bg-black/10"></div>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="absolute inset-0 flex items-center justify-center"
-            >
-              <div className="text-white text-3xl font-light tracking-wider">ADMIN PORTAL</div>
-            </motion.div>
+    <div 
+      className="min-h-screen flex items-center justify-center bg-gray-50"
+      onClick={handleContainerClick}
+    >
+      <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-md space-y-6">
+        <h2 className="text-2xl font-bold text-center mb-4">
+          {mode === "login"
+            ? "התחברות מנהל"
+            : mode === "set"
+            ? "יצירת סיסמת מנהל"
+            : "שינוי סיסמה"}
+        </h2>
+        
+        {error && (
+          <div className="text-red-600 text-center flex items-center justify-center gap-2">
+            {cooldownEndTime && <ClockIcon className="h-5 w-5" />}
+            {cooldownEndTime && remainingSeconds !== null
+              ? `נא להמתין ${remainingSeconds} שניות לפני ניסיון נוסף`
+              : error}
           </div>
+        )}
+        {success && <div className="text-green-600 text-center">{success}</div>}
 
-          {/* Login Form */}
-          <div className="p-8">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-              className="text-center mb-8"
-            >
-              <h1 className="text-2xl font-light text-gray-800 mb-2">Welcome Back</h1>
-              <p className="text-gray-500 text-sm">Please enter your password to continue</p>
-            </motion.div>
-
-            {error && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                className="mb-6 p-4 bg-red-50 border border-red-100 rounded-lg"
-                dir="ltr"
-              >
-                <div className="flex items-center">
-                  <svg className="w-5 h-5 text-red-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span className="text-sm text-red-600" dir="ltr">{error}</span>
-                </div>
-              </motion.div>
-            )}
-
-            <motion.form
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-              onSubmit={handleLogin}
-              className="space-y-6"
-            >
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2" dir="ltr">
-                  Password
-                </label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    id="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:border-gray-500 focus:ring-2 focus:ring-gray-200 transition-colors duration-200"
-                    required
-                    disabled={isLoading}
-                    dir="ltr"
-                  />
-                  <div className="absolute inset-y-0 left-0 flex items-center pl-3">
-                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                  </div>
-                </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {mode === "change" && (
+            <div>
+              <label className="block mb-1 text-right">סיסמה נוכחית</label>
+              <div className="relative">
+                <input
+                  type={showOld ? "text" : "password"}
+                  className="w-full border rounded px-3 py-2 pl-10"
+                  value={oldPassword}
+                  onChange={(e) => setOldPassword(e.target.value)}
+                  autoComplete="current-password"
+                  dir="ltr"
+                />
+                <button
+                  type="button"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  onClick={() => setShowOld((v) => !v)}
+                >
+                  {showOld ? (
+                    <EyeSlashIcon className="h-5 w-5" aria-hidden="true" />
+                  ) : (
+                    <EyeIcon className="h-5 w-5" aria-hidden="true" />
+                  )}
+                </button>
               </div>
+            </div>
+          )}
 
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full bg-gradient-to-r from-gray-700 to-gray-900 text-white py-3 px-4 rounded-lg hover:from-gray-800 hover:to-gray-950 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? (
-                  <div className="flex items-center justify-center">
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Signing in...
-                  </div>
-                ) : (
-                  'Sign In'
-                )}
-              </button>
-            </motion.form>
-          </div>
-        </div>
+          {(mode === "set" || mode === "change" || mode === "login") && (
+            <div>
+              <label className="block mb-1 text-right">
+                {mode === "login" ? "סיסמה" : "סיסמה חדשה"}
+              </label>
+              <div className="relative">
+                <input
+                  type={showNew ? "text" : "password"}
+                  className="w-full border rounded px-3 py-2 pl-10"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete={mode === "login" ? "current-password" : "new-password"}
+                  dir="ltr"
+                />
+                <button
+                  type="button"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  onClick={() => setShowNew((v) => !v)}
+                >
+                  {showNew ? (
+                    <EyeSlashIcon className="h-5 w-5" aria-hidden="true" />
+                  ) : (
+                    <EyeIcon className="h-5 w-5" aria-hidden="true" />
+                  )}
+                </button>
+              </div>
+              {(mode === "set" || mode === "change") && (
+                <div className="text-xs text-gray-500 mt-1 text-right">
+                  הסיסמה חייבת להיות באורך 6 תווים לפחות, לכלול אותיות גדולות, קטנות, מספר ותו מיוחד.
+                </div>
+              )}
+            </div>
+          )}
 
-        {/* Footer */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.5 }}
-          className="text-center mt-6"
-        >
-          
-        </motion.div>
-      </motion.div>
+          {(mode === "set" || mode === "change") && (
+            <div>
+              <label className="block mb-1 text-right">אימות סיסמה</label>
+              <div className="relative">
+                <input
+                  type={showConfirm ? "text" : "password"}
+                  className="w-full border rounded px-3 py-2 pl-10"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
+                  dir="ltr"
+                />
+                <button
+                  type="button"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  onClick={() => setShowConfirm((v) => !v)}
+                >
+                  {showConfirm ? (
+                    <EyeSlashIcon className="h-5 w-5" aria-hidden="true" />
+                  ) : (
+                    <EyeIcon className="h-5 w-5" aria-hidden="true" />
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {(mode === "set" || mode === "change") && (
+            <div className="mt-2 space-y-2">
+              {(() => {
+                const validation = getPasswordValidation(password);
+                const unmetRequirements = Object.entries(validation)
+                  .filter(([, isValid]) => !isValid);
+                
+                if (unmetRequirements.length === 0) return null;
+
+                return (
+                  <>
+                    <div className="text-sm font-medium text-gray-700">דרישות סיסמה חסרות:</div>
+                    <ul className="space-y-1 text-sm">
+                      {unmetRequirements.map(([key]) => {
+                        const labels: Record<string, string> = {
+                          minLength: "לפחות 6 תווים",
+                          hasLowercase: "אות קטנה",
+                          hasUppercase: "אות גדולה",
+                          hasNumber: "מספר",
+                          hasSpecial: "תו מיוחד",
+                        };
+                        return (
+                          <li key={key} className="flex items-center gap-2 text-right">
+                            <XCircleIcon className="h-5 w-5 text-red-500" />
+                            <span className="text-red-700">
+                              {labels[key]}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
+          {(mode === "set" || mode === "change") && password !== confirmPassword && (
+            <div className="text-sm text-red-600 text-right">
+              הסיסמאות אינן תואמות
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={!canSubmit || loading}
+            className={`w-full py-2 rounded font-bold transition-colors ${
+              !canSubmit 
+                ? 'bg-gray-300 cursor-not-allowed' 
+                : 'bg-gray-800 hover:bg-gray-700 text-white'
+            }`}
+          >
+            {loading ? (
+              <span className="inline-block animate-pulse">מעבד...</span>
+            ) : mode === "login" ? (
+              "התחבר"
+            ) : mode === "set" ? (
+              "צור סיסמה"
+            ) : (
+              "שנה סיסמה"
+            )}
+          </button>
+
+          {!canSubmit && (mode === "set" || mode === "change") && (
+            <div className="text-sm text-gray-600 text-center">
+              יש למלא את כל דרישות הסיסמה כדי להמשיך
+            </div>
+          )}
+        </form>
+
+        {isSet && mode === "login" && (
+          <button
+            type="button"
+            onClick={() => setMode("change")}
+            className="w-full text-gray-800 mt-2 hover:text-gray-700 underline transition-colors"
+          >
+            שכחת סיסמה? שנה סיסמה
+          </button>
+        )}
+
+        {mode === "change" && (
+          <button
+            type="button"
+            onClick={() => setMode("login")}
+            className="w-full text-gray-600 mt-2 hover:text-gray-500 underline transition-colors"
+          >
+            חזור להתחברות
+          </button>
+        )}
+      </div>
     </div>
   );
 } 

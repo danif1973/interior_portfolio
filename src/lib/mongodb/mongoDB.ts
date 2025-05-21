@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { initDatabase, isDatabaseInitialized } from './initMongoDB';
+import { ensureAuthenticationCollectionExists } from '@/lib/models/authentication';
 
 const MONGODB_URI = process.env.MONGODB_URI!;
 
@@ -65,6 +66,11 @@ async function connectDB() {
         await initDatabase();
         console.log('✓ Database initialization complete');
       }
+      
+      // Always ensure authentication collection exists
+      console.log('Checking/creating authentication collection...');
+      await ensureAuthenticationCollectionExists();
+      console.log('✓ Authentication collection checked/created');
       
       return mongoose;
     });

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { Project } from '@/lib/models/Project';
+import { ensureAuthenticationCollectionExists } from '@/lib/models/authentication';
 
 async function createDatabase(dbName: string) {
   try {
@@ -94,6 +95,15 @@ export async function initDatabase() {
     // Check if Project collection exists
     const projectCollectionExists = collections.some(c => c.name === 'projects');
     console.log('Project collection exists:', projectCollectionExists);
+
+    // Check if authentication collection exists
+    const authenticationCollectionExists = collections.some(c => c.name === 'authentication');
+    console.log('Authentication collection exists:', authenticationCollectionExists);
+    if (!authenticationCollectionExists) {
+      console.log('Creating authentication collection...');
+      await ensureAuthenticationCollectionExists();
+      console.log('✓ Authentication collection created successfully');
+    }
 
     if (!projectCollectionExists) {
       console.log('\nStep 4: Creating Project collection...');
