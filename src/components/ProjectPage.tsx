@@ -15,13 +15,13 @@ interface ProjectPageProps {
 export default function ProjectPage({ project, backHref, backText }: ProjectPageProps) {
   useEffect(() => {
     console.log('=== Project Page Component Mounted ===');
-    console.log('Project details:', {
-      id: project.id,
-      title: project.title,
-      summary: project.summary,
-      imageCount: project.images.length,
-      mainImageUrl: project.mainImage.url
-    });
+    // console.log('Project details:', {
+    //   id: project.id,
+    //   title: project.title,
+    //   summary: project.summary,
+    //   imageCount: project.images.length,
+    //   mainImageUrl: project.mainImage.url
+    // });
   }, [project]);
 
   return (

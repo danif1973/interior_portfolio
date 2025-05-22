@@ -66,12 +66,7 @@ async function connectDB() {
         await initDatabase();
         console.log('✓ Database initialization complete');
       }
-      
-      // Always ensure authentication collection exists
-      console.log('Checking/creating authentication collection...');
-      await ensureAuthenticationCollectionExists();
-      console.log('✓ Authentication collection checked/created');
-      
+           
       return mongoose;
     });
   }

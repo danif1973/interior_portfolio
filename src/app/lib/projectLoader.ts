@@ -69,12 +69,12 @@ export async function loadProjects(): Promise<Project[]> {
           
           projects.push(project);
           console.log('✅ Successfully loaded project:', project.title);
-          console.log('Project details:', {
-            id: project.id,
-            title: project.title,
-            imageCount: project.images.length,
-            mainImageUrl: project.mainImage.url
-          });
+          // console.log('Project details:', {
+          //   id: project.id,
+          //   title: project.title,
+          //   imageCount: project.images.length,
+          //   mainImageUrl: project.mainImage.url
+          // });
         } catch (error) {
           console.error(`❌ Error loading project ${projectDir}:`, error);
         }

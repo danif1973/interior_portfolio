@@ -128,6 +128,7 @@ export async function ensureAuthenticationCollectionExists() {
   
   try {
     // Drop and recreate the collection to ensure schema is updated
+    console.log('Dropping authentication collection');
     await mongoose.connection.db.dropCollection('authentication').catch(() => {
       console.log('No existing authentication collection to drop');
     });
