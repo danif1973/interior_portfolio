@@ -101,17 +101,26 @@ export async function POST(request: NextRequest, { params }: { params: { action:
     const { password } = body as { password: string };
     const record = await Authentication.findOne({ key: PASSWORD_KEY });
     if (!record) {
+      logger.warn('[Login] No password set');
       return NextResponse.json({ error: 'No password set.' }, { status: 400 });
     }
     const isMatch = await bcrypt.compare(password, record.value);
     if (!isMatch) {
+      logger.warn('[Login] Invalid password attempt');
       return NextResponse.json({ error: 'Invalid password.' }, { status: 401 });
     }
+
     // Generate session token
     const sessionToken = crypto.randomBytes(32).toString('hex');
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours from now
     
+    logger.debug('[Login] Creating new session', {
+      createdAt: now,
+      expiresAt,
+      tokenLength: sessionToken.length
+    });
+
     // Store session token in DB with expiration
     if (!Array.isArray(record.sessions)) record.sessions = [];
     record.sessions.push({ 
@@ -119,7 +128,18 @@ export async function POST(request: NextRequest, { params }: { params: { action:
       createdAt: now,
       expiresAt: expiresAt
     });
-    await record.save();
+    
+    try {
+      await record.save();
+      logger.info('[Login] Session created successfully', {
+        createdAt: now,
+        expiresAt,
+        activeSessions: record.sessions.length
+      });
+    } catch (error) {
+      logger.error('[Login] Failed to save session', { error });
+      return NextResponse.json({ error: 'Failed to create session.' }, { status: 500 });
+    }
     
     // Set cookie
     const response = NextResponse.json({ success: true });

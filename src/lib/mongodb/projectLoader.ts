@@ -1,5 +1,6 @@
 import connectDB from './mongoDB';
 import { Project } from '@/lib/models/Project';
+import { logger } from '@/lib/logger';
 
 interface ProjectImage {
   url: string;
@@ -32,13 +33,16 @@ interface ProjectDocument {
 export async function loadProjects(): Promise<ProjectData[]> {
   try {
     await connectDB();
-    console.log('Loading projects from MongoDB...');
+    logger.info('Loading projects from MongoDB', { action: 'load' });
     
     const projects = await Project.find({})
       .sort({ createdAt: -1 })
       .lean() as unknown as ProjectDocument[];
     
-    console.log(`Found ${projects.length} projects`);
+    logger.info('Projects loaded successfully', { 
+      count: projects.length,
+      action: 'complete'
+    });
     
     // Transform the data to match the expected format
     return projects.map((project) => ({
@@ -62,7 +66,11 @@ export async function loadProjects(): Promise<ProjectData[]> {
       }))
     }));
   } catch (error) {
-    console.error('Error loading projects:', error);
+    logger.error('Error loading projects', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      action: 'load'
+    });
     throw new Error('Failed to load projects');
   }
 }
@@ -70,19 +78,26 @@ export async function loadProjects(): Promise<ProjectData[]> {
 export async function loadProject(id: string): Promise<ProjectData | null> {
   try {
     await connectDB();
-    console.log('Loading project from MongoDB:', id);
+    logger.info('Loading project from MongoDB', { 
+      id,
+      action: 'load'
+    });
     
     const project = await Project.findOne({ id }).lean() as unknown as ProjectDocument | null;
     
     if (!project) {
-      console.log('Project not found:', id);
+      logger.info('Project not found', { 
+        id,
+        action: 'not_found'
+      });
       return null;
     }
     
-    console.log('Project found:', {
-      id: project.id,
+    logger.info('Project loaded successfully', { 
+      id,
       title: project.title,
-      imageCount: project.images.length
+      imageCount: project.images.length,
+      action: 'complete'
     });
     
     // Transform the data to match the expected format
@@ -107,7 +122,12 @@ export async function loadProject(id: string): Promise<ProjectData | null> {
       }))
     };
   } catch (error) {
-    console.error('Error loading project:', error);
+    logger.error('Error loading project', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      id,
+      action: 'load'
+    });
     throw new Error('Failed to load project');
   }
 } 

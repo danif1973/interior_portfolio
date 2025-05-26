@@ -5,6 +5,7 @@ import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 import { XCircleIcon, ClockIcon } from "@heroicons/react/24/solid";
 import { fetchWithCSRF } from '@/lib/csrf-client';
 import { useRouter } from 'next/navigation';
+import { logger } from '@/lib/logger';
 
 const PASSWORD_RULES = {
   minLength: (pwd: string) => pwd.length >= 6,
@@ -43,7 +44,10 @@ export default function AdminAuthPage() {
         setIsSet(data.isSet);
         setMode(data.isSet ? "login" : "set");
       } catch (error: unknown) {
-        console.error('Failed to check authentication status:', error);
+        logger.error('[AdminLogin] Failed to check authentication status', {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined
+        });
         setError("Failed to check authentication status");
       } finally {
         setInitialLoading(false);
@@ -122,7 +126,9 @@ export default function AdminAuthPage() {
   });
 
   const handleContainerClick = useCallback((e: React.MouseEvent) => {
-    console.log('Container clicked', e.target);
+    logger.debug('[AdminLogin] Container clicked', {
+      target: e.target instanceof HTMLElement ? e.target.tagName : 'unknown'
+    });
   }, []);
 
   const handleSubmit = useCallback(async (e?: React.FormEvent) => {
@@ -169,6 +175,14 @@ export default function AdminAuthPage() {
         ? { password, confirmPassword }
         : { oldPassword, newPassword: password, confirmPassword };
 
+      logger.debug('[AdminLogin] Attempting authentication', {
+        mode,
+        endpoint,
+        hasPassword: !!password,
+        hasConfirmPassword: !!confirmPassword,
+        hasOldPassword: !!oldPassword
+      });
+
       const res = await fetchWithCSRF(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -204,35 +218,32 @@ export default function AdminAuthPage() {
           } else {
             errorMsg = `סיסמה שגויה. נותרו ${3 - newAttempts} ניסיונות`;
           }
-        } else if (res.status === 403) {
-          if (data && typeof data === 'object' && data !== null) {
-            const reason = (data as { reason?: string }).reason;
-            if (reason?.includes('Too many failed attempts') || 
-                reason?.includes('rate limit exceeded')) {
-              const cooldownTime = Date.now() + 60000;
-              setCooldownEndTime(cooldownTime);
-              setRemainingSeconds(60);
-              localStorage.setItem('loginCooldown', cooldownTime.toString());
-              errorMsg = 'יותר מדי ניסיונות כושלים. נא להמתין דקה לפני ניסיון נוסף';
-            } else {
-              errorMsg = 'שגיאת אבטחה. נא לרענן את הדף ולנסות שוב';
-            }
+        }
+
+        if (data && typeof data === 'object' && data !== null) {
+          const reason = (data as { reason?: string }).reason;
+          if (reason?.includes('Too many failed attempts') || 
+              reason?.includes('rate limit exceeded')) {
+            const cooldownTime = Date.now() + 60000;
+            setCooldownEndTime(cooldownTime);
+            setRemainingSeconds(60);
+            localStorage.setItem('loginCooldown', cooldownTime.toString());
+            errorMsg = 'יותר מדי ניסיונות כושלים. נא להמתין דקה לפני ניסיון נוסף';
           } else {
             errorMsg = 'שגיאת אבטחה. נא לרענן את הדף ולנסות שוב';
           }
-        } else if (res.status === 400) {
-          if (data && typeof data === 'object' && data !== null && 'error' in data) {
-            errorMsg = (data as { error?: string }).error || errorMsg;
-          } else if (typeof data === 'string') {
-            errorMsg = data;
-          } else if (rawText) {
-            errorMsg = rawText;
-          }
-        } else if (res.status === 500) {
-          errorMsg = 'שגיאת שרת. נא לנסות שוב מאוחר יותר';
+        } else {
+          errorMsg = 'שגיאת אבטחה. נא לרענן את הדף ולנסות שוב';
         }
-        
-        console.error('Login error response:', { status: res.status, data, rawText });
+
+        logger.error('[AdminLogin] Authentication failed', {
+          status: res.status,
+          data,
+          rawText,
+          attempts: attempts + 1,
+          mode,
+          error: errorMsg
+        });
         throw new Error(errorMsg);
       }
 
@@ -244,6 +255,11 @@ export default function AdminAuthPage() {
         setAttempts(0);
         setCooldownEndTime(null);
       }
+
+      logger.info('[AdminLogin] Authentication successful', {
+        mode,
+        action: mode === 'login' ? 'login' : mode === 'set' ? 'set_password' : 'change_password'
+      });
 
       setSuccess(
         mode === "login"
@@ -270,7 +286,11 @@ export default function AdminAuthPage() {
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'שגיאה לא ידועה. נא לנסות שוב מאוחר יותר';
       setError(errorMessage);
-      console.error('Login error:', error);
+      logger.error('[AdminLogin] Authentication error', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        mode
+      });
     } finally {
       setLoading(false);
     }

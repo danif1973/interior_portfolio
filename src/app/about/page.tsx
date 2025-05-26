@@ -9,7 +9,7 @@ export default function AboutPage() {
   const [story, setStory] = useState('');
 
   useEffect(() => {
-    fetch('/images/my_story.txt')
+    fetch('/user_files/my_story.txt')
       .then((res) => res.text())
       .then(setStory)
       .catch(() => setStory('לא ניתן לטעון את הסיפור כרגע.'));

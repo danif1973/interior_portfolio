@@ -1,85 +1,99 @@
 import mongoose from 'mongoose';
-import { initDatabase, isDatabaseInitialized } from './initMongoDB';
-import { ensureAuthenticationCollectionExists } from '@/lib/models/authentication';
+import { logger } from '@/lib/logger';
 
-const MONGODB_URI = process.env.MONGODB_URI!;
+const MONGODB_URI = process.env.MONGODB_URI;
 
 // Add debug logging
-console.log('\n=== DATABASE CONNECTION CHECK ===');
-console.log('Environment variables loaded:', {
-  MONGODB_URI: MONGODB_URI ? 'Present (hidden for security)' : 'Missing',
-  NODE_ENV: process.env.NODE_ENV
+logger.info('Database connection check', {
+  environment: {
+    hasMongoUri: !!MONGODB_URI,
+    nodeEnv: process.env.NODE_ENV
+  }
 });
 
 if (!MONGODB_URI) {
-  console.error('❌ MONGODB_URI is missing from environment variables');
+  logger.error('MongoDB URI missing', {
+    error: 'MONGODB_URI is missing from environment variables'
+  });
   throw new Error('Please define the MONGODB_URI environment variable inside .env.local');
 }
 
-interface MongooseCache {
-  conn: typeof mongoose | null;
-  promise: Promise<typeof mongoose> | null;
-}
+let isConnected = false;
 
-declare global {
-  // eslint-disable-next-line no-var
-  var mongoose: MongooseCache | undefined;
-}
-
-const cached: MongooseCache = global.mongoose || { conn: null, promise: null };
-
-if (!global.mongoose) {
-  global.mongoose = cached;
-}
-
-async function connectDB() {
-  if (cached.conn) {
-    console.log('✓ Using existing database connection');
-    return cached.conn;
-  }
-
-  if (!cached.promise) {
-    // Extract database name from URI
-    const dbName = MONGODB_URI.split('/').pop()?.split('?')[0];
-    if (!dbName) {
-      throw new Error('Could not extract database name from URI');
-    }
-
-    const opts = {
-      bufferCommands: false,
-      dbName // Add the database name to connection options
-    };
-
-    console.log('\n=== INITIALIZING DATABASE CONNECTION ===');
-    console.log('Attempting to connect to database:', dbName);
-    //console.log('Connection string:', MONGODB_URI.split('@')[0] + '@***');
-
-    cached.promise = mongoose.connect(MONGODB_URI, opts).then(async (mongoose) => {
-      console.log('✓ Initial database connection established');
-      
-      // Initialize database if needed
-      const isInitialized = await isDatabaseInitialized();
-      console.log('Database initialized:', isInitialized);
-      
-      if (!isInitialized) {
-        console.log('Initializing database...');
-        await initDatabase();
-        console.log('✓ Database initialization complete');
-      }
-           
-      return mongoose;
-    });
+export async function connectDB() {
+  if (isConnected) {
+    logger.info('Using existing database connection', { status: 'connected' });
+    return;
   }
 
   try {
-    cached.conn = await cached.promise;
-  } catch (e) {
-    cached.promise = null;
-    console.error('❌ Database connection failed:', e);
-    throw e;
+    logger.info('Connecting to MongoDB', { action: 'connect' });
+    await mongoose.connect(MONGODB_URI as string);
+    isConnected = true;
+    logger.info('Connected to MongoDB successfully', { status: 'connected' });
+  } catch (error) {
+    logger.error('Error connecting to MongoDB', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    throw error;
+  }
+}
+
+export async function disconnectDB() {
+  if (!isConnected) {
+    logger.info('No active database connection to disconnect', { status: 'disconnected' });
+    return;
   }
 
-  return cached.conn;
+  try {
+    logger.info('Disconnecting from MongoDB', { action: 'disconnect' });
+    await mongoose.disconnect();
+    isConnected = false;
+    logger.info('Disconnected from MongoDB successfully', { status: 'disconnected' });
+  } catch (error) {
+    logger.error('Error disconnecting from MongoDB', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    throw error;
+  }
 }
+
+// Export mongoose connection for direct access if needed
+export const connection = mongoose.connection;
+
+// Add connection event listeners
+connection.on('connected', () => {
+  logger.info('Mongoose connected to MongoDB', { status: 'connected' });
+});
+
+connection.on('error', (err) => {
+  logger.error('Mongoose connection error', {
+    error: err instanceof Error ? err.message : 'Unknown error',
+    stack: err instanceof Error ? err.stack : undefined
+  });
+});
+
+connection.on('disconnected', () => {
+  logger.info('Mongoose disconnected from MongoDB', { status: 'disconnected' });
+  isConnected = false;
+});
+
+// Handle process termination
+process.on('SIGINT', async () => {
+  try {
+    logger.info('SIGINT received, closing MongoDB connection', { action: 'terminate' });
+    await disconnectDB();
+    logger.info('MongoDB connection closed due to application termination', { status: 'terminated' });
+    process.exit(0);
+  } catch (error) {
+    logger.error('Error during application termination', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    process.exit(1);
+  }
+});
 
 export default connectDB; 

@@ -1,14 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb/mongoDB';
 import { Project } from '@/lib/models/Project';
-
-interface ProjectImage {
-  url: string;
-  alt: string;
-  description: string;
-  data?: Buffer;
-  contentType?: string;
-}
+import { logger } from '@/lib/logger';
+import connectDB from '@/lib/mongodb/mongoDB';
 
 // GET /api/projects/[id] - Get project details
 export async function GET(
@@ -16,19 +9,46 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    logger.info('[ProjectAPI] Fetching project', {
+      action: 'get',
+      projectId: params.id
+    });
+
     await connectDB();
-    const project = await Project.findOne({ id: params.id });
+    const project = await Project.findById(params.id);
 
     if (!project) {
+      logger.warn('[ProjectAPI] Project not found', {
+        action: 'get',
+        projectId: params.id
+      });
       return NextResponse.json(
         { error: 'Project not found' },
         { status: 404 }
       );
     }
 
-    return NextResponse.json(project);
+    // Map _id to id for frontend compatibility
+    const projectResponse = {
+      ...project.toObject(),
+      id: project._id.toString(),
+      _id: undefined
+    };
+
+    logger.info('[ProjectAPI] Project fetched successfully', {
+      action: 'get',
+      projectId: params.id,
+      title: project.title
+    });
+
+    return NextResponse.json(projectResponse);
   } catch (error) {
-    console.error('Error fetching project:', error);
+    logger.error('[ProjectAPI] Error fetching project', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      action: 'get',
+      projectId: params.id
+    });
     return NextResponse.json(
       { error: 'Failed to fetch project' },
       { status: 500 }
@@ -42,172 +62,179 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    await connectDB();
-    console.log('Starting PUT request for project:', params.id);
-    
-    // Check content type
-    const contentType = request.headers.get('content-type') || '';
-    console.log('Content-Type:', contentType);
-    
-    let title: string;
-    let summary: string | null;
-    let description: string | null;
-    let mainImageIndex: number;
-    let images: ProjectImage[] = [];
-
-    if (contentType.includes('multipart/form-data')) {
-      const formData = await request.formData();
-      console.log('FormData keys:', Array.from(formData.keys()));
-      
-      title = formData.get('title') as string;
-      summary = formData.get('summary') as string | null;
-      description = formData.get('description') as string | null;
-      mainImageIndex = parseInt(formData.get('mainImageIndex') as string);
-      console.log('Received data:', { title, summary, description, mainImageIndex });
-
-      // Process all images in order
-      let index = 0;
-      const processedImages: ProjectImage[] = [];
-
-      // First, collect all existing images
-      const existingImages = new Map<number, ProjectImage>();
-      while (formData.has(`existing-image-${index}`)) {
-        const existingImageStr = formData.get(`existing-image-${index}`) as string;
-        console.log(`Processing existing-image-${index}`);
-        
-        try {
-          const existingImage = JSON.parse(existingImageStr);
-          existingImages.set(index, {
-            url: existingImage.url,
-            alt: existingImage.alt || `${title} - Image ${index}`,
-            description: existingImage.description || '',
-            contentType: existingImage.contentType || 'image/jpeg'
-          });
-        } catch (e) {
-          console.error('Error parsing existing image:', e);
-        }
-        index++;
-      }
-
-      // Then process all images in order (both existing and new)
-      index = 0;
-      while (formData.has(`image-${index}`) || existingImages.has(index)) {
-        if (formData.has(`image-${index}`)) {
-          // Handle new image
-          const imageFile = formData.get(`image-${index}`) as File;
-          const imageDataStr = formData.get(`image-data-${index}`) as string;
-          
-          console.log(`Processing new image-${index}:`, imageFile.name, imageFile.type);
-
-          // Parse image metadata
-          let imageData = {
-            alt: `${title} - ${imageFile.name}`,
-            description: '',
-            contentType: imageFile.type
-          };
-          
-          try {
-            if (imageDataStr) {
-              const parsedData = JSON.parse(imageDataStr);
-              imageData = {
-                ...imageData,
-                ...parsedData
-              };
-            }
-          } catch (e) {
-            console.error('Error parsing image data:', e);
-          }
-
-          // Convert image to buffer
-          const bytes = await imageFile.arrayBuffer();
-          const buffer = Buffer.from(bytes);
-          
-          processedImages.push({
-            url: `data:${imageFile.type};base64,${buffer.toString('base64')}`,
-            alt: imageData.alt,
-            description: imageData.description,
-            data: buffer,
-            contentType: imageFile.type
-          });
-        } else if (existingImages.has(index)) {
-          // Handle existing image
-          processedImages.push(existingImages.get(index)!);
-        }
-        index++;
-      }
-
-      images = processedImages;
-    } else {
-      // Handle JSON data
-      const data = await request.json();
-      title = data.title;
-      summary = data.summary;
-      description = data.description;
-      mainImageIndex = data.mainImageIndex;
-      images = data.images;
-    }
-
-    console.log('Final images array length:', images.length);
-    console.log('Main image index:', mainImageIndex);
-
-    if (!title) {
-      return NextResponse.json(
-        { error: 'Title is required' },
-        { status: 400 }
-      );
-    }
-
-    if (images.length === 0) {
-      return NextResponse.json(
-        { error: 'At least one image is required' },
-        { status: 400 }
-      );
-    }
-
-    // Update project with new images array
-    const updateData = {
-      title,
-      summary: summary || '',
-      description: description || '',
-      mainImage: images[mainImageIndex],
-      images,
-      updatedAt: new Date()
-    };
-
-    console.log('Updating project with data:', {
-      ...updateData,
-      images: updateData.images.length,
-      mainImage: updateData.mainImage ? 'present' : 'missing'
+    logger.info('[ProjectAPI] Starting project update', {
+      action: 'update',
+      projectId: params.id
     });
 
-    const project = await Project.findOneAndUpdate(
-      { id: params.id },
-      updateData,
+    const contentType = request.headers.get('content-type');
+    if (!contentType?.includes('multipart/form-data')) {
+      logger.warn('[ProjectAPI] Invalid content type for project update', {
+        contentType,
+        action: 'update',
+        projectId: params.id
+      });
+      return NextResponse.json(
+        { error: 'Content-Type must be multipart/form-data' },
+        { status: 400 }
+      );
+    }
+
+    const formData = await request.formData();
+    logger.debug('[ProjectAPI] Processing form data', {
+      keys: Array.from(formData.keys()),
+      action: 'update',
+      projectId: params.id
+    });
+
+    const title = formData.get('title') as string;
+    const summary = formData.get('summary') as string;
+    const description = formData.get('description') as string;
+    const mainImageIndex = parseInt(formData.get('mainImageIndex') as string) || 0;
+
+    logger.debug('[ProjectAPI] Received update data', {
+      hasTitle: !!title,
+      hasSummary: !!summary,
+      hasDescription: !!description,
+      mainImageIndex,
+      action: 'update',
+      projectId: params.id
+    });
+
+    // Process existing images
+    const images = [];
+    let index = 0;
+    while (formData.has(`existing-image-${index}`)) {
+      try {
+        const imageData = formData.get(`existing-image-${index}`) as string;
+        const image = JSON.parse(imageData);
+        images.push(image);
+        logger.debug('[ProjectAPI] Processed existing image', {
+          index,
+          imageUrl: image.url,
+          action: 'update',
+          projectId: params.id
+        });
+      } catch (e) {
+        logger.error('[ProjectAPI] Error parsing existing image', {
+          error: e instanceof Error ? e.message : 'Unknown error',
+          stack: e instanceof Error ? e.stack : undefined,
+          index,
+          action: 'update',
+          projectId: params.id
+        });
+        return NextResponse.json(
+          { error: 'Failed to process existing image' },
+          { status: 400 }
+        );
+      }
+      index++;
+    }
+
+    // Process new images
+    index = 0;
+    let imageFile: File | null = null;
+    while (formData.has(`new-image-${index}`)) {
+      try {
+        imageFile = formData.get(`new-image-${index}`) as File;
+        logger.debug('[ProjectAPI] Processing new image', {
+          index,
+          fileName: imageFile.name,
+          fileType: imageFile.type,
+          action: 'update',
+          projectId: params.id
+        });
+
+        const imageData = await imageFile.arrayBuffer();
+        images.push({
+          url: `/images/${imageFile.name}`,
+          alt: title,
+          description: summary,
+          data: Buffer.from(imageData),
+          contentType: imageFile.type
+        });
+      } catch (e) {
+        logger.error('[ProjectAPI] Error parsing image data', {
+          error: e instanceof Error ? e.message : 'Unknown error',
+          stack: e instanceof Error ? e.stack : undefined,
+          index,
+          fileName: imageFile?.name || 'unknown',
+          fileType: imageFile?.type || 'unknown',
+          action: 'update',
+          projectId: params.id
+        });
+        return NextResponse.json(
+          { error: 'Failed to process new image' },
+          { status: 400 }
+        );
+      }
+      index++;
+    }
+
+    logger.debug('[ProjectAPI] Image processing complete', {
+      totalImages: images.length,
+      mainImageIndex,
+      action: 'update',
+      projectId: params.id
+    });
+
+    // Update project
+    const updateData = {
+      ...(title && { title }),
+      ...(summary && { summary }),
+      ...(description && { description }),
+      ...(images.length > 0 && { images }),
+      mainImageIndex
+    };
+
+    logger.debug('[ProjectAPI] Updating project with data', {
+      updateFields: Object.keys(updateData),
+      action: 'update',
+      projectId: params.id
+    });
+
+    await connectDB();
+    const updatedProject = await Project.findByIdAndUpdate(
+      params.id,
+      { $set: updateData },
       { new: true }
     );
 
-    if (!project) {
-      console.error('Project not found:', params.id);
+    if (!updatedProject) {
+      logger.warn('[ProjectAPI] Project not found for update', {
+        action: 'update',
+        projectId: params.id
+      });
       return NextResponse.json(
         { error: 'Project not found' },
         { status: 404 }
       );
     }
 
-    console.log('Project updated successfully:', {
-      id: project.id,
-      title: project.title,
-      imagesCount: project.images.length
+    // Map _id to id for frontend compatibility
+    const projectResponse = {
+      ...updatedProject.toObject(),
+      id: updatedProject._id.toString(),
+      _id: undefined
+    };
+
+    logger.info('[ProjectAPI] Project updated successfully', {
+      action: 'update',
+      projectId: params.id,
+      title: updatedProject.title,
+      imageCount: updatedProject.images.length
     });
-    
-    return NextResponse.json(project);
+
+    return NextResponse.json(projectResponse);
   } catch (error) {
-    console.error('Error updating project:', error);
+    logger.error('[ProjectAPI] Error updating project', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      action: 'update',
+      projectId: params.id
+    });
     return NextResponse.json(
-      { 
-        error: 'Failed to update project',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
+      { error: 'Failed to update project' },
       { status: 500 }
     );
   }
@@ -219,19 +246,46 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    await connectDB();
-    const project = await Project.findOneAndDelete({ id: params.id });
+    logger.info('[ProjectAPI] Starting project deletion', {
+      action: 'delete',
+      projectId: params.id
+    });
 
-    if (!project) {
+    await connectDB();
+    const deletedProject = await Project.findByIdAndDelete(params.id);
+
+    if (!deletedProject) {
+      logger.warn('[ProjectAPI] Project not found for deletion', {
+        action: 'delete',
+        projectId: params.id
+      });
       return NextResponse.json(
         { error: 'Project not found' },
         { status: 404 }
       );
     }
 
-    return NextResponse.json({ message: 'Project deleted successfully' });
+    // Map _id to id for frontend compatibility
+    const projectResponse = {
+      ...deletedProject.toObject(),
+      id: deletedProject._id.toString(),
+      _id: undefined
+    };
+
+    logger.info('[ProjectAPI] Project deleted successfully', {
+      action: 'delete',
+      projectId: params.id,
+      title: deletedProject.title
+    });
+
+    return NextResponse.json({ message: 'Project deleted successfully', project: projectResponse });
   } catch (error) {
-    console.error('Error deleting project:', error);
+    logger.error('[ProjectAPI] Error deleting project', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      action: 'delete',
+      projectId: params.id
+    });
     return NextResponse.json(
       { error: 'Failed to delete project' },
       { status: 500 }

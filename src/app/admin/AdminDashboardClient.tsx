@@ -1,62 +1,55 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import type { Project } from '@/types/project';
+import { logger } from '@/lib/logger';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import ConfirmationModal from '@/components/ConfirmationModal';
-
-interface Project {
-  id: string;
-  title: string;
-  summary: string;
-  description: string;
-  mainImage: {
-    url: string;
-    alt: string;
-    description: string;
-  };
-  images: Array<{
-    url: string;
-    alt: string;
-    description: string;
-  }>;
-}
 
 export default function AdminDashboardClient() {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
   const router = useRouter();
 
-  const fetchProjects = async () => {
-    try {
-      setIsLoading(true);
-      const response = await fetch('/api/projects', {
-        method: 'GET',
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-      if (!response.ok) {
-        throw new Error(`Failed to fetch projects: ${response.status} ${response.statusText}`);
-      }
-      const data = await response.json();
-      if (!Array.isArray(data)) {
-        throw new Error('Invalid response format');
-      }
-      setProjects(data);
-    } catch (error) {
-      console.error('Error fetching projects:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
     fetchProjects();
   }, []);
+
+  const fetchProjects = async () => {
+    try {
+      logger.info('[AdminDashboard] Fetching projects', {
+        action: 'fetch_projects'
+      });
+
+      const response = await fetch('/api/projects');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      
+      logger.info('[AdminDashboard] Projects fetched successfully', {
+        action: 'fetch_projects',
+        count: data.length
+      });
+
+      setProjects(data);
+      setError(null);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch projects';
+      logger.error('[AdminDashboard] Error fetching projects', {
+        error: errorMessage,
+        stack: error instanceof Error ? error.stack : undefined,
+        action: 'fetch_projects'
+      });
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -88,6 +81,11 @@ export default function AdminDashboardClient() {
   const handleDeleteConfirm = async () => {
     if (!projectToDelete) return;
     try {
+      logger.info('[AdminDashboard] Deleting project', {
+        action: 'delete_project',
+        projectId: projectToDelete
+      });
+
       const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
       if (!metaToken) {
         throw new Error('CSRF token not found in meta tag. Please refresh the page and try again.');
@@ -105,19 +103,42 @@ export default function AdminDashboardClient() {
         setDeleteModalOpen(false);
         setProjectToDelete(null);
         await fetchProjects();
+        logger.info('[AdminDashboard] Project deleted successfully', {
+          action: 'delete_project',
+          projectId: projectToDelete
+        });
       } else {
         const errorData = await response.json().catch(() => ({}));
-        console.error('Failed to delete project:', {
-          status: response.status,
-          error: errorData
+        const errorMessage = errorData.error || `HTTP error! status: ${response.status}`;
+        logger.error('[AdminDashboard] Error deleting project', {
+          error: errorMessage,
+          stack: errorData.stack,
+          action: 'delete_project',
+          projectId: projectToDelete
         });
+        setError(errorMessage);
       }
     } catch (error) {
-      console.error('Error deleting project:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete project';
+      logger.error('[AdminDashboard] Error deleting project', {
+        error: errorMessage,
+        stack: error instanceof Error ? error.stack : undefined,
+        action: 'delete_project',
+        projectId: projectToDelete
+      });
+      setError(errorMessage);
     }
   };
 
-  if (isLoading) {
+  const handleImageError = (projectId: string, imageUrl: string) => {
+    logger.error('[AdminDashboard] Image failed to load', {
+      action: 'image_load',
+      projectId,
+      imageUrl
+    });
+  };
+
+  if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
         {/* Header Skeleton */}
@@ -162,6 +183,23 @@ export default function AdminDashboardClient() {
             </div>
           </div>
         </main>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4">
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+          <strong className="font-bold">שגיאה!</strong>
+          <span className="block sm:inline"> {error}</span>
+        </div>
+        <button
+          onClick={fetchProjects}
+          className="mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+        >
+          נסה שוב
+        </button>
       </div>
     );
   }
@@ -215,9 +253,7 @@ export default function AdminDashboardClient() {
                         alt={project.mainImage.alt || project.title}
                         fill
                         className="object-cover"
-                        onError={() => {
-                          console.error('Image failed to load:', project.mainImage.url);
-                        }}
+                        onError={() => handleImageError(project.id, project.mainImage.url)}
                         unoptimized
                         priority
                       />

@@ -71,19 +71,30 @@ function ProjectGalleryContent({ project }: ProjectGalleryProps) {
           {/* Main Image and Description */}
           <div className="relative group flex-1">
             {/* 3D Border Effect Container */}
-            <div className="relative aspect-[16/9] bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl p-4 shadow-[0_0_0_1px_rgba(0,0,0,0.1),0_2px_4px_rgba(0,0,0,0.1)] transition-all duration-300 group-hover:shadow-[0_0_0_1px_rgba(0,0,0,0.1),0_4px_8px_rgba(0,0,0,0.1),0_8px_16px_rgba(0,0,0,0.1)] group-hover:-translate-y-1 cursor-zoom-in"
+            <div className="relative aspect-[16/9] bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl p-2 shadow-[0_0_0_1px_rgba(0,0,0,0.1),0_2px_4px_rgba(0,0,0,0.1)] transition-all duration-300 group-hover:shadow-[0_0_0_1px_rgba(0,0,0,0.1),0_4px_8px_rgba(0,0,0,0.1),0_8px_16px_rgba(0,0,0,0.1)] group-hover:-translate-y-1 cursor-zoom-in"
               onClick={() => setIsZoomed(true)}
             >
               {/* Inner Container with Image */}
               <div className="relative w-full h-full rounded-xl overflow-hidden">
-                <Image
-                  src={project.images[selectedImageIndex].url}
-                  alt={project.images[selectedImageIndex].alt || project.title}
-                  fill
-                  className="object-cover transition-transform duration-500 group-hover:scale-[1.02]"
-                  priority
-                  onError={(e) => console.error(`❌ Error loading main image: ${project.images[selectedImageIndex].url}`, e)}
-                />
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={selectedImageIndex}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="relative w-full h-full"
+                  >
+                    <Image
+                      src={project.images[selectedImageIndex].url}
+                      alt={project.images[selectedImageIndex].alt || project.title}
+                      fill
+                      className="object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+                      priority
+                      onError={(e) => console.error(`❌ Error loading main image: ${project.images[selectedImageIndex].url}`, e)}
+                    />
+                  </motion.div>
+                </AnimatePresence>
                 {/* Overlay gradient */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               </div>

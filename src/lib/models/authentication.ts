@@ -1,5 +1,6 @@
 import { Schema, Document, model } from 'mongoose';
 import mongoose from 'mongoose';
+import { logger } from '@/lib/logger';
 
 export interface IAuthentication extends Document {
   key: string; // e.g., 'admin_password'
@@ -58,88 +59,137 @@ AuthenticationSchema.pre('save', function(next) {
 const Authentication = mongoose.models.Authentication || model<IAuthentication>('Authentication', AuthenticationSchema);
 export default Authentication;
 
-// Add function to ensure TTL index exists and update schema
-export async function ensureTTLIndex() {
-  if (!mongoose.connection?.db) throw new Error('MongoDB connection is not established.');
-  
+// Function to ensure the authentication collection exists and has proper indexes
+export async function ensureAuthenticationCollectionExists() {
   try {
-    // Update all existing documents to include expiresAt
+    logger.info('Ensuring authentication collection exists', {
+      action: 'init'
+    });
+
+    // Check if the collection exists
+    const db = mongoose.connection.db;
+    if (!db) {
+      throw new Error('Database connection not established');
+    }
+    const collections = await db.listCollections({ name: 'authentications' }).toArray();
+    const collectionExists = collections.length > 0;
+
+    if (!collectionExists) {
+      logger.info('Creating authentication collection', {
+        action: 'create'
+      });
+      await Authentication.createCollection();
+      logger.info('Authentication collection created', {
+        action: 'complete'
+      });
+    }
+
+    // Update existing sessions to include expiresAt if they don't have it
     const result = await Authentication.updateMany(
-      { 'sessions.expiresAt': { $exists: false } },
-      [
-        {
-          $set: {
-            'sessions': {
-              $map: {
-                input: '$sessions',
-                as: 'session',
-                in: {
-                  $mergeObjects: [
-                    '$$session',
-                    {
-                      expiresAt: {
-                        $add: ['$$session.createdAt', 24 * 60 * 60 * 1000] // 24 hours from createdAt
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        }
-      ]
+      { expiresAt: { $exists: false } },
+      { $set: { expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) } }
     );
-    console.log('Updated existing sessions with expiresAt:', result);
+
+    if (result.modifiedCount > 0) {
+      logger.info('Updated existing sessions with expiresAt', {
+        modifiedCount: result.modifiedCount,
+        action: 'update'
+      });
+    }
 
     // Drop existing TTL index if it exists
     try {
-      await Authentication.collection.dropIndex('sessions.expiresAt_1');
-      console.log('Dropped existing TTL index');
+      await Authentication.collection.dropIndex('expiresAt_1');
+      logger.info('Dropped existing TTL index', {
+        action: 'drop'
+      });
     } catch (dropError) {
-      // Ignore error if index doesn't exist
-      console.log('No existing TTL index to drop:', dropError instanceof Error ? dropError.message : 'Unknown error');
+      if (dropError instanceof Error && dropError.message.includes('index not found')) {
+        logger.debug('No existing TTL index to drop', {
+          error: dropError.message,
+          action: 'skip'
+        });
+      } else {
+        logger.warn('Error dropping TTL index', {
+          error: dropError instanceof Error ? dropError.message : 'Unknown error',
+          stack: dropError instanceof Error ? dropError.stack : undefined,
+          action: 'drop'
+        });
+      }
     }
 
-    // Create the TTL index
+    // Create new TTL index
     await Authentication.collection.createIndex(
-      { 'sessions.expiresAt': 1 },
+      { expiresAt: 1 },
       { expireAfterSeconds: 0 }
     );
-    console.log('Created TTL index on sessions.expiresAt');
+    logger.info('Created TTL index on sessions.expiresAt', {
+      action: 'create'
+    });
 
-    // Verify the index exists
-    const indexes = await Authentication.collection.indexes();
-    const hasTTLIndex = indexes.some(index => 
-      index.key['sessions.expiresAt'] === 1 && 
-      index.expireAfterSeconds === 0
-    );
-    
-    if (!hasTTLIndex) {
-      throw new Error('Failed to create TTL index');
-    }
+    return true;
   } catch (error) {
-    console.error('Error ensuring TTL index:', error);
+    logger.error('Failed to ensure authentication collection exists', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      action: 'init'
+    });
     throw error;
   }
 }
 
-export async function ensureAuthenticationCollectionExists() {
-  if (!mongoose.connection?.db) throw new Error('MongoDB connection is not established.');
-  
+// Function to drop the authentication collection
+export async function dropAuthenticationCollection() {
   try {
-    // Drop and recreate the collection to ensure schema is updated
-    console.log('Dropping authentication collection');
-    await mongoose.connection.db.dropCollection('authentication').catch(() => {
-      console.log('No existing authentication collection to drop');
+    logger.info('Dropping authentication collection', {
+      action: 'drop'
     });
-    
-    await mongoose.connection.createCollection('authentication');
-    console.log('Created fresh authentication collection');
-    
-    // Ensure TTL index exists
-    await ensureTTLIndex();
+
+    const db = mongoose.connection.db;
+    if (!db) {
+      throw new Error('Database connection not established');
+    }
+    const collections = await db.listCollections({ name: 'authentications' }).toArray();
+    if (collections.length === 0) {
+      logger.info('No existing authentication collection to drop', {
+        action: 'skip'
+      });
+      return;
+    }
+
+    await Authentication.collection.drop();
+    logger.info('Authentication collection dropped successfully', {
+      action: 'complete'
+    });
   } catch (error) {
-    console.error('Error recreating authentication collection:', error);
+    logger.error('Failed to drop authentication collection', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      action: 'drop'
+    });
+    throw error;
+  }
+}
+
+// Function to create a fresh authentication collection
+export async function createAuthenticationCollection() {
+  try {
+    logger.info('Creating fresh authentication collection', {
+      action: 'create'
+    });
+
+    await dropAuthenticationCollection();
+    await ensureAuthenticationCollectionExists();
+    
+    logger.info('Created fresh authentication collection', {
+      action: 'complete'
+    });
+  } catch (error) {
+    logger.error('Failed to create fresh authentication collection', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      action: 'create'
+    });
     throw error;
   }
 } 

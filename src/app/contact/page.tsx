@@ -132,6 +132,7 @@ export default function ContactPage() {
               </div>
 
               <div className="space-y-6">
+                {/* Address section commented out
                 <div className="flex items-start space-x-4 space-x-reverse">
                   <div className="flex-shrink-0">
                     <svg className="h-6 w-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -144,6 +145,7 @@ export default function ContactPage() {
                     <p className="text-gray-600 font-rubik">הצנחנים 20, הוד השרון</p>
                   </div>
                 </div>
+                */}
 
                 <div className="flex items-start space-x-4 space-x-reverse">
                   <div className="flex-shrink-0">
